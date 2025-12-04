@@ -1,0 +1,14 @@
+{
+  "id": "com.ncsender.boxjoints",
+  "name": "BoxJoints",
+  "version": "0.1.0",
+  "minAppVersion": "0.3.19",
+  "author": "ncSender",
+  "description": "Box joints generator for CNC",
+  "entry": "index.js",
+  "icon": "icon.svg",
+  "category": "gcode-generator",
+  "repository": "",
+  "events": [],
+  "permissions": ["gcode.modify"]
+}

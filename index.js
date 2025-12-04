@@ -1,0 +1,851 @@
+/**
+ * BoxJoints Plugin
+ * Generates G-code for box joint operations
+ */
+
+export async function onLoad(ctx) {
+  ctx.log('BoxJoints plugin loaded');
+
+  // Register the BoxJoints tool in the Tools menu
+  ctx.registerToolMenu('Box Joints', async () => {
+    ctx.log('Box Joints tool clicked');
+
+    // Get app settings to determine units
+    const appSettings = ctx.getAppSettings();
+    const unitsPreference = appSettings.unitsPreference || 'metric';
+    const isImperial = unitsPreference === 'imperial';
+
+    // Unit labels
+    const distanceUnit = isImperial ? 'in' : 'mm';
+    const feedRateUnit = isImperial ? 'in/min' : 'mm/min';
+
+    // Get saved settings
+    const savedSettings = ctx.getSettings()?.boxjoints || {};
+
+    // Conversion factor
+    const MM_TO_INCH = 0.0393701;
+    const convertToDisplay = (value) => isImperial ? parseFloat((value * MM_TO_INCH).toFixed(4)) : value;
+
+    const settings = {
+      boardThickness: convertToDisplay(savedSettings.boardThickness ?? 19),
+      boardWidth: convertToDisplay(savedSettings.boardWidth ?? 100),
+      fingerCount: savedSettings.fingerCount ?? 4,
+      bitDiameter: convertToDisplay(savedSettings.bitDiameter ?? 6.35),
+      fitTolerance: convertToDisplay(savedSettings.fitTolerance ?? 0.1),
+      pieceType: savedSettings.pieceType ?? 'A',
+      depthPerPass: convertToDisplay(savedSettings.depthPerPass ?? 3),
+      feedRate: convertToDisplay(savedSettings.feedRate ?? 1000),
+      spindleRpm: savedSettings.spindleRpm ?? 18000,
+      spindleDelay: savedSettings.spindleDelay ?? 3,
+      mistM7: savedSettings.mistM7 ?? false,
+      floodM8: savedSettings.floodM8 ?? false
+    };
+
+    ctx.showDialog(
+      'Box Joints',
+      /* html */ `
+      <style>
+        .boxjoints-layout {
+          display: flex;
+          flex-direction: column;
+          max-width: 800px;
+          width: 100%;
+        }
+        .form-column {
+          flex: 1;
+          overflow-y: auto;
+          padding: 20px;
+        }
+        .plugin-dialog-footer {
+          grid-column: 1 / -1;
+          padding: 16px 20px;
+          border-top: 1px solid var(--color-border);
+          background: var(--color-surface);
+        }
+        .form-section {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .form-cards-container {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          width: 100%;
+          box-sizing: border-box;
+        }
+
+        .form-card {
+          background: var(--color-surface-muted);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-medium);
+          padding: 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.15);
+          box-sizing: border-box;
+          min-width: 0;
+        }
+
+        .form-card-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: var(--color-text-primary);
+          margin-bottom: 16px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid var(--color-border);
+          text-align: center;
+        }
+
+        .calculated-info {
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-small);
+          padding: 12px;
+          margin-top: 16px;
+          font-size: 0.85rem;
+        }
+
+        .calculated-info-title {
+          font-weight: 600;
+          color: var(--color-text-primary);
+          margin-bottom: 8px;
+        }
+
+        .calculated-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 4px 0;
+          color: var(--color-text-secondary);
+        }
+
+        .calculated-label {
+          font-weight: 500;
+        }
+
+        .calculated-value {
+          font-weight: 600;
+          color: var(--color-accent);
+        }
+
+        .validation-tooltip {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: #dc3545;
+          color: white;
+          padding: 8px 12px;
+          border-radius: var(--radius-small);
+          font-size: 0.8rem;
+          margin-top: 4px;
+          z-index: 1000;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+          display: none;
+        }
+
+        .validation-tooltip::before {
+          content: '';
+          position: absolute;
+          top: -4px;
+          left: 20px;
+          width: 0;
+          height: 0;
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-bottom: 4px solid #dc3545;
+        }
+
+        .form-group {
+          position: relative;
+        }
+
+        .form-group.has-error .validation-tooltip {
+          display: block;
+        }
+
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+        .form-row.single {
+          grid-template-columns: 1fr;
+        }
+        .form-row.coolant-row {
+          grid-template-columns: 1fr;
+          display: flex;
+          align-items: center;
+          gap: 0;
+          justify-content: space-between;
+        }
+        .coolant-label {
+          font-size: 0.85rem;
+          font-weight: 500;
+          color: var(--color-text-primary);
+          flex-shrink: 0;
+        }
+        .coolant-controls {
+          flex: 1;
+          display: flex;
+          gap: 24px;
+          justify-content: flex-end;
+        }
+        .coolant-control {
+          flex: 1;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .form-group {
+          display: flex;
+          flex-direction: column;
+        }
+        label {
+          font-size: 0.85rem;
+          font-weight: 500;
+          margin-bottom: 4px;
+          color: var(--color-text-primary);
+          text-align: center;
+        }
+        input[type="number"] {
+          padding: 8px;
+          text-align: center;
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-small);
+          font-size: 0.9rem;
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+        }
+        input[type="number"]:focus {
+          outline: none;
+          border-color: var(--color-accent);
+        }
+        input[type="number"].input-error {
+          border-color: #dc3545;
+        }
+        select {
+          padding: 8px;
+          text-align: center;
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-small);
+          font-size: 0.9rem;
+          background: var(--color-surface);
+          color: var(--color-text-primary);
+          cursor: pointer;
+        }
+        select:focus {
+          outline: none;
+          border-color: var(--color-accent);
+        }
+        .toggle-switch {
+          position: relative;
+          display: inline-block;
+          width: 44px;
+          height: 24px;
+        }
+        .toggle-switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        .toggle-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: var(--color-surface-muted);
+          border: 1px solid var(--color-border);
+          transition: 0.3s;
+          border-radius: 24px;
+        }
+        .toggle-slider:before {
+          position: absolute;
+          content: "";
+          height: 16px;
+          width: 16px;
+          left: 3px;
+          bottom: 3px;
+          background-color: var(--color-text-primary);
+          transition: 0.3s;
+          border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+          background-color: var(--color-accent);
+          border-color: var(--color-accent);
+        }
+        input:checked + .toggle-slider:before {
+          transform: translateX(20px);
+          background-color: white;
+        }
+        .button-group {
+          display: flex;
+          gap: 10px;
+          justify-content: center;
+        }
+        .btn {
+          padding: 10px 20px;
+          border: none;
+          border-radius: var(--radius-small);
+          font-size: 0.9rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.2s;
+        }
+        .btn:hover {
+          opacity: 0.9;
+        }
+        .btn-secondary {
+          background: var(--color-surface-muted);
+          color: var(--color-text-primary);
+          border: 1px solid var(--color-border);
+        }
+        .btn-primary {
+          background: var(--color-accent);
+          color: white;
+        }
+
+        @media (max-width: 600px) {
+          .form-row {
+            grid-template-columns: 1fr;
+          }
+          .form-cards-container {
+            grid-template-columns: 1fr;
+          }
+        }
+      </style>
+
+      <div class="boxjoints-layout">
+        <div class="form-column">
+          <form id="boxjointsForm" novalidate>
+            <div class="form-cards-container">
+              <div class="form-card">
+                <div class="form-card-title">Dimensions</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="boardThickness">Board Thickness (${distanceUnit})</label>
+                    <input type="number" id="boardThickness" step="0.1" value="${settings.boardThickness}" required>
+                    <div class="validation-tooltip" id="boardThickness-error"></div>
+                  </div>
+                  <div class="form-group">
+                    <label for="boardWidth">Board Width (${distanceUnit})</label>
+                    <input type="number" id="boardWidth" step="0.1" value="${settings.boardWidth}" required>
+                    <div class="validation-tooltip" id="boardWidth-error"></div>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="fingerCount">Finger Count</label>
+                    <input type="number" id="fingerCount" step="1" min="1" max="20" value="${settings.fingerCount}" required>
+                    <div class="validation-tooltip" id="fingerCount-error"></div>
+                  </div>
+                  <div class="form-group">
+                    <label for="fitTolerance">Fit Tolerance (${distanceUnit})</label>
+                    <input type="number" id="fitTolerance" step="0.01" value="${settings.fitTolerance}" required>
+                    <div class="validation-tooltip" id="fitTolerance-error"></div>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="pieceType">Piece Type</label>
+                    <select id="pieceType">
+                      <option value="A" ${settings.pieceType === 'A' ? 'selected' : ''}>A (pins)</option>
+                      <option value="B" ${settings.pieceType === 'B' ? 'selected' : ''}>B (tails)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="depthPerPass">Depth Per Pass (${distanceUnit})</label>
+                    <input type="number" id="depthPerPass" step="0.1" value="${settings.depthPerPass}" required>
+                    <div class="validation-tooltip" id="depthPerPass-error"></div>
+                  </div>
+                </div>
+                <div class="calculated-info">
+                  <div class="calculated-info-title">Calculated Dimensions</div>
+                  <div class="calculated-row">
+                    <span class="calculated-label">Finger Width:</span>
+                    <span class="calculated-value" id="calc-finger-width">-</span>
+                  </div>
+                  <div class="calculated-row">
+                    <span class="calculated-label">Slot Width:</span>
+                    <span class="calculated-value" id="calc-slot-width">-</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-card">
+                <div class="form-card-title">Machine Settings</div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="bitDiameter">Bit Diameter (${distanceUnit})</label>
+                    <input type="number" id="bitDiameter" step="0.01" value="${settings.bitDiameter}" required>
+                    <div class="validation-tooltip" id="bitDiameter-error"></div>
+                  </div>
+                  <div class="form-group">
+                    <label for="feedRate">Feed Rate (${feedRateUnit})</label>
+                    <input type="number" id="feedRate" step="1" value="${settings.feedRate}" required>
+                    <div class="validation-tooltip" id="feedRate-error"></div>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="spindleRpm">Spindle RPM</label>
+                    <input type="number" id="spindleRpm" step="1" value="${settings.spindleRpm}" required>
+                    <div class="validation-tooltip" id="spindleRpm-error"></div>
+                  </div>
+                  <div class="form-group">
+                    <label for="spindleDelay">Spindle Delay (s)</label>
+                    <input type="number" id="spindleDelay" min="0" max="30" step="1" value="${settings.spindleDelay}">
+                  </div>
+                </div>
+                <div class="form-row coolant-row">
+                  <div class="coolant-label">Mist Coolant</div>
+                  <div class="coolant-control">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="mistM7" ${settings.mistM7 ? 'checked' : ''}>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="form-row coolant-row">
+                  <div class="coolant-label">Flood Coolant</div>
+                  <div class="coolant-control">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="floodM8" ${settings.floodM8 ? 'checked' : ''}>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="plugin-dialog-footer">
+        <div class="button-group">
+          <button type="button" class="btn btn-secondary" onclick="window.postMessage({type: 'close-plugin-dialog'}, '*')">Close</button>
+          <button type="button" class="btn btn-primary" onclick="document.getElementById('boxjointsForm').requestSubmit()">Generate</button>
+        </div>
+      </div>
+
+      <script>
+        (function() {
+          const isImperial = ${isImperial};
+          const INCH_TO_MM = 25.4;
+
+          // Validation rules (metric)
+          const validationRules = isImperial ? {
+            boardThickness: { min: 0.1, max: 4, label: 'Board Thickness' },
+            boardWidth: { min: 1, max: 48, label: 'Board Width' },
+            fingerCount: { min: 1, max: 20, label: 'Finger Count' },
+            bitDiameter: { min: 0.1, max: 1, label: 'Bit Diameter' },
+            fitTolerance: { min: 0, max: 0.1, label: 'Fit Tolerance' },
+            depthPerPass: { min: 0.01, max: 4, label: 'Depth Per Pass' },
+            feedRate: { min: 10, max: 500, label: 'Feed Rate' },
+            spindleRpm: { min: 1000, max: 30000, label: 'Spindle RPM' }
+          } : {
+            boardThickness: { min: 3, max: 100, label: 'Board Thickness' },
+            boardWidth: { min: 25, max: 1200, label: 'Board Width' },
+            fingerCount: { min: 1, max: 20, label: 'Finger Count' },
+            bitDiameter: { min: 3, max: 25, label: 'Bit Diameter' },
+            fitTolerance: { min: 0, max: 2, label: 'Fit Tolerance' },
+            depthPerPass: { min: 0.5, max: 100, label: 'Depth Per Pass' },
+            feedRate: { min: 100, max: 10000, label: 'Feed Rate' },
+            spindleRpm: { min: 1000, max: 30000, label: 'Spindle RPM' }
+          };
+
+          function validateInput(fieldId) {
+            const input = document.getElementById(fieldId);
+            const errorDiv = document.getElementById(fieldId + '-error');
+            const formGroup = input?.closest('.form-group');
+            const value = parseFloat(input.value);
+            const rules = validationRules[fieldId];
+
+            if (!rules || !input) return true;
+
+            if (isNaN(value)) {
+              input.classList.add('input-error');
+              if (formGroup) formGroup.classList.add('has-error');
+              if (errorDiv) errorDiv.textContent = \`\${rules.label} is required\`;
+              return false;
+            }
+
+            if (value < rules.min || value > rules.max) {
+              input.classList.add('input-error');
+              if (formGroup) formGroup.classList.add('has-error');
+              if (errorDiv) errorDiv.textContent = \`Must be between \${rules.min} and \${rules.max}\`;
+              return false;
+            }
+
+            input.classList.remove('input-error');
+            if (formGroup) formGroup.classList.remove('has-error');
+            if (errorDiv) errorDiv.textContent = '';
+            return true;
+          }
+
+          function validateAllInputs() {
+            const fields = Object.keys(validationRules);
+            let isValid = true;
+            fields.forEach(field => {
+              if (!validateInput(field)) {
+                isValid = false;
+              }
+            });
+            return isValid;
+          }
+
+          // Validate slot width vs bit diameter
+          function validateSlotVsBit() {
+            const boardWidth = parseFloat(document.getElementById('boardWidth').value);
+            const fingerCount = parseInt(document.getElementById('fingerCount').value);
+            const fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
+            const bitDiameter = parseFloat(document.getElementById('bitDiameter').value);
+
+            const fingerCountInput = document.getElementById('fingerCount');
+            const fingerCountErrorDiv = document.getElementById('fingerCount-error');
+            const fingerCountFormGroup = fingerCountInput?.closest('.form-group');
+
+            // Only validate if all values are present
+            if (isNaN(boardWidth) || isNaN(fingerCount) || isNaN(bitDiameter) || fingerCount <= 0) {
+              // Clear any existing error
+              fingerCountInput.classList.remove('input-error');
+              if (fingerCountFormGroup) fingerCountFormGroup.classList.remove('has-error');
+              if (fingerCountErrorDiv) fingerCountErrorDiv.textContent = '';
+              return true;
+            }
+
+            const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
+            const boardWidthMetric = convertToMetric(boardWidth);
+            const bitDiameterMetric = convertToMetric(bitDiameter);
+            const fitToleranceMetric = convertToMetric(fitTolerance || 0);
+            const calculatedFingerWidth = boardWidthMetric / (fingerCount * 2);
+            const calculatedSlotWidth = calculatedFingerWidth + fitToleranceMetric;
+
+            if (calculatedSlotWidth < bitDiameterMetric) {
+              fingerCountInput.classList.add('input-error');
+              if (fingerCountFormGroup) fingerCountFormGroup.classList.add('has-error');
+              if (fingerCountErrorDiv) {
+                fingerCountErrorDiv.textContent = \`Slot width (\${calculatedSlotWidth.toFixed(2)}mm) is smaller than bit diameter (\${bitDiameterMetric.toFixed(2)}mm). Use fewer fingers or smaller bit.\`;
+              }
+              return false;
+            } else {
+              fingerCountInput.classList.remove('input-error');
+              if (fingerCountFormGroup) fingerCountFormGroup.classList.remove('has-error');
+              if (fingerCountErrorDiv) fingerCountErrorDiv.textContent = '';
+              return true;
+            }
+          }
+
+          // Update calculated dimensions
+          function updateCalculatedDimensions() {
+            const boardWidth = parseFloat(document.getElementById('boardWidth').value);
+            const fingerCount = parseInt(document.getElementById('fingerCount').value);
+            const fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
+
+            const calcFingerWidth = document.getElementById('calc-finger-width');
+            const calcSlotWidth = document.getElementById('calc-slot-width');
+
+            if (!isNaN(boardWidth) && !isNaN(fingerCount) && fingerCount > 0) {
+              const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
+              const boardWidthMetric = convertToMetric(boardWidth);
+              const fitToleranceMetric = convertToMetric(fitTolerance || 0);
+
+              const fingerWidth = boardWidthMetric / (fingerCount * 2);
+              const slotWidth = fingerWidth + fitToleranceMetric;
+
+              const unit = isImperial ? 'in' : 'mm';
+              const displayFingerWidth = isImperial ? fingerWidth / INCH_TO_MM : fingerWidth;
+              const displaySlotWidth = isImperial ? slotWidth / INCH_TO_MM : slotWidth;
+
+              calcFingerWidth.textContent = \`\${displayFingerWidth.toFixed(3)} \${unit}\`;
+              calcSlotWidth.textContent = \`\${displaySlotWidth.toFixed(3)} \${unit}\`;
+            } else {
+              calcFingerWidth.textContent = '-';
+              calcSlotWidth.textContent = '-';
+            }
+
+            // Validate slot vs bit
+            validateSlotVsBit();
+          }
+
+          // Add validation on blur for each input
+          Object.keys(validationRules).forEach(fieldId => {
+            const input = document.getElementById(fieldId);
+            if (input) {
+              input.addEventListener('blur', () => validateInput(fieldId));
+              input.addEventListener('input', () => {
+                if (input.classList.contains('input-error')) {
+                  validateInput(fieldId);
+                }
+                // Update calculated dimensions when relevant fields change
+                if (['boardWidth', 'fingerCount', 'fitTolerance'].includes(fieldId)) {
+                  updateCalculatedDimensions();
+                }
+              });
+            }
+          });
+
+          // Add listeners for real-time calculation updates
+          ['boardWidth', 'fingerCount', 'fitTolerance', 'bitDiameter'].forEach(fieldId => {
+            const input = document.getElementById(fieldId);
+            if (input) {
+              input.addEventListener('input', updateCalculatedDimensions);
+            }
+          });
+
+          // Initial calculation
+          updateCalculatedDimensions();
+
+          function generateBoxJointsGCode(params) {
+            const {
+              boardThickness,
+              boardWidth,
+              fingerCount,
+              bitDiameter,
+              fitTolerance,
+              pieceType,
+              depthPerPass,
+              feedRate,
+              spindleRpm,
+              spindleDelay,
+              mistM7,
+              floodM8
+            } = params;
+
+            // Convert to metric if needed
+            const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
+            const bt = convertToMetric(boardThickness);
+            const bw = convertToMetric(boardWidth);
+            const bd = convertToMetric(bitDiameter);
+            const ft = convertToMetric(fitTolerance);
+            const dpp = convertToMetric(depthPerPass);
+            const fr = convertToMetric(feedRate);
+
+            // Calculate finger width from board width and finger count
+            // Total pattern = fingerCount fingers + fingerCount slots = fingerCount * 2
+            const fw = bw / (fingerCount * 2);
+
+            const gcode = [];
+
+            // Header
+            gcode.push('(Box Joints - Piece ' + pieceType + ')');
+            gcode.push(\`(Board Thickness: \${boardThickness}\${isImperial ? 'in' : 'mm'})\`);
+            gcode.push(\`(Board Width: \${boardWidth}\${isImperial ? 'in' : 'mm'})\`);
+            gcode.push(\`(Finger Count: \${fingerCount})\`);
+            gcode.push(\`(Calculated Finger Width: \${fw.toFixed(3)}mm)\`);
+            gcode.push(\`(Bit Diameter: \${bitDiameter}\${isImperial ? 'in' : 'mm'})\`);
+            gcode.push('');
+
+            // Setup
+            gcode.push('G21 ; Metric units');
+            gcode.push('G90 ; Absolute positioning');
+            gcode.push('G94 ; Feed per minute');
+
+            // Coolant
+            if (mistM7) gcode.push('M7 ; Mist coolant on');
+            if (floodM8) gcode.push('M8 ; Flood coolant on');
+
+            // Spindle
+            if (spindleRpm > 0) {
+              gcode.push(\`M3 S\${spindleRpm} ; Start spindle\`);
+              gcode.push(\`G4 P\${spindleDelay} ; Spindle delay\`);
+            }
+            gcode.push('');
+
+            // Slot width includes tolerance
+            const slotWidth = fw + ft; // Add tolerance to slot width
+            const numFingers = fingerCount;
+
+            // Determine starting offset based on piece type
+            // Piece A starts with a finger, Piece B starts with a slot
+            const startOffset = pieceType === 'B' ? fw : 0;
+
+            // Calculate number of passes needed
+            const numPasses = Math.ceil(bt / dpp);
+
+            gcode.push('G0 Z5.0 ; Move to safe height');
+            gcode.push('G0 X0 Y0 ; Move to start position');
+            gcode.push('');
+
+            // Cut each slot
+            for (let i = 0; i < numFingers; i++) {
+              const slotStart = startOffset + (i * fw * 2);
+              const slotEnd = slotStart + slotWidth;
+
+              // Skip if slot goes beyond board width
+              if (slotEnd > bw) break;
+
+              gcode.push(\`; Slot \${i + 1}\`);
+
+              // Calculate number of passes across slot width (X-axis)
+              const bitRadius = bd / 2;
+              const stepOver = bd * 0.4; // 40% stepover for better coverage
+
+              // Calculate how many passes needed to cover the slot width
+              // If slot is smaller than bit, 1 pass. Otherwise calculate based on stepover
+              let numXPasses;
+              if (slotWidth <= bd) {
+                numXPasses = 1;
+              } else {
+                // Number of passes = 1 (first pass) + ceil of remaining width / stepover
+                const remainingWidth = slotWidth - bd;
+                numXPasses = 1 + Math.ceil(remainingWidth / stepOver);
+              }
+
+              // For each depth pass (Z-axis)
+              for (let pass = 0; pass < numPasses; pass++) {
+                const depth = -Math.min((pass + 1) * dpp, bt);
+
+                gcode.push(\`; Pass \${pass + 1} at depth \${depth.toFixed(3)} (\${numXPasses} horizontal passes)\`);
+
+                // Zigzag pattern across the slot width
+                for (let xPass = 0; xPass < numXPasses; xPass++) {
+                  // Calculate X position for this pass
+                  // Start at slot edge + bit radius, then step over
+                  const xOffset = slotStart + bitRadius + (xPass * stepOver);
+
+                  // Clamp to slot boundaries
+                  const xPos = Math.min(xOffset, slotEnd - bitRadius);
+
+                  // Position above this X position
+                  gcode.push(\`G0 X\${xPos.toFixed(3)} Y0\`);
+
+                  // Plunge to depth on first pass only
+                  if (xPass === 0) {
+                    gcode.push(\`G1 Z\${depth.toFixed(3)} F\${(fr / 2).toFixed(1)}\`);
+                  }
+
+                  // Cut forward along Y-axis
+                  gcode.push(\`G1 Y\${bt.toFixed(3)} F\${fr.toFixed(1)}\`);
+
+                  // Move to next X position and cut backward (zigzag) if not last pass
+                  if (xPass < numXPasses - 1) {
+                    const nextX = Math.min(slotStart + bitRadius + ((xPass + 1) * stepOver), slotEnd - bitRadius);
+                    gcode.push(\`G1 X\${nextX.toFixed(3)}\`);
+                    // Cut backward along Y-axis (zigzag)
+                    gcode.push(\`G1 Y0 F\${fr.toFixed(1)}\`);
+                  }
+                }
+
+                // Retract
+                gcode.push('G0 Z5.0');
+              }
+
+              gcode.push('');
+            }
+
+            // Footer
+            gcode.push('G0 Z5.0 ; Safe height');
+            gcode.push('G0 X0 Y0 ; Return to origin');
+            if (mistM7 || floodM8) gcode.push('M9 ; Coolant off');
+            if (spindleRpm > 0) gcode.push('M5 ; Spindle off');
+            gcode.push('M30 ; Program end');
+
+            return gcode.join('\\n');
+          }
+
+          document.getElementById('boxjointsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validate all inputs
+            if (!validateAllInputs()) {
+              return;
+            }
+
+            // Get values from form
+            const displayValues = {
+              boardThickness: parseFloat(document.getElementById('boardThickness').value),
+              boardWidth: parseFloat(document.getElementById('boardWidth').value),
+              fingerCount: parseInt(document.getElementById('fingerCount').value),
+              bitDiameter: parseFloat(document.getElementById('bitDiameter').value),
+              fitTolerance: parseFloat(document.getElementById('fitTolerance').value),
+              pieceType: document.getElementById('pieceType').value,
+              depthPerPass: parseFloat(document.getElementById('depthPerPass').value),
+              feedRate: parseFloat(document.getElementById('feedRate').value),
+              spindleRpm: parseFloat(document.getElementById('spindleRpm').value),
+              spindleDelay: parseInt(document.getElementById('spindleDelay').value),
+              mistM7: document.getElementById('mistM7').checked,
+              floodM8: document.getElementById('floodM8').checked
+            };
+
+            // Validate slot width vs bit diameter
+            if (!validateSlotVsBit()) {
+              return;
+            }
+
+            // Convert to metric for storage
+            const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
+            const settingsToSave = {
+              boxjoints: {
+                boardThickness: convertToMetric(displayValues.boardThickness),
+                boardWidth: convertToMetric(displayValues.boardWidth),
+                fingerCount: displayValues.fingerCount,
+                bitDiameter: convertToMetric(displayValues.bitDiameter),
+                fitTolerance: convertToMetric(displayValues.fitTolerance),
+                pieceType: displayValues.pieceType,
+                depthPerPass: convertToMetric(displayValues.depthPerPass),
+                feedRate: convertToMetric(displayValues.feedRate),
+                spindleRpm: displayValues.spindleRpm,
+                spindleDelay: displayValues.spindleDelay,
+                mistM7: displayValues.mistM7,
+                floodM8: displayValues.floodM8
+              }
+            };
+
+            // Save settings
+            await fetch('/api/plugins/com.ncsender.boxjoints/settings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(settingsToSave)
+            });
+
+            console.log('Box Joints settings saved:', settingsToSave);
+
+            // Generate G-code
+            const gcode = generateBoxJointsGCode(displayValues);
+
+            // Create FormData and upload G-code as file
+            const formData = new FormData();
+            const blob = new Blob([gcode], { type: 'text/plain' });
+            const filename = \`BoxJoint_\${displayValues.pieceType}_BT-\${displayValues.boardThickness}_BW-\${displayValues.boardWidth}_FC-\${displayValues.fingerCount}_DPP-\${displayValues.depthPerPass}.nc\`;
+            formData.append('file', blob, filename);
+
+            try {
+              const response = await fetch('/api/gcode-files', {
+                method: 'POST',
+                body: formData
+              });
+
+              if (response.ok) {
+                console.log('Box Joints G-code generated and loaded');
+              } else {
+                console.error('Failed to load G-code');
+              }
+            } catch (error) {
+              console.error('Error uploading G-code:', error);
+            }
+
+            window.postMessage({type: 'close-plugin-dialog'}, '*');
+          });
+        })();
+      </script>
+      `,
+      {
+        closable: true,
+        width: '800px'
+      }
+    );
+  });
+}
+
+export async function onUnload(ctx) {
+  ctx.log('BoxJoints plugin unloaded');
+}
