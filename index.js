@@ -346,7 +346,7 @@ export async function onLoad(ctx) {
                   <div class="form-row">
                     <div class="form-group">
                       <label for="fingerCount">Finger Count</label>
-                      <input type="number" id="fingerCount" step="1" min="1" max="20" value="${settings.fingerCount}" required>
+                      <input type="number" id="fingerCount" step="1" min="2" max="20" value="${settings.fingerCount}" required>
                       <div class="validation-tooltip" id="fingerCount-error"></div>
                     </div>
                     <div class="form-group">
@@ -420,15 +420,8 @@ export async function onLoad(ctx) {
               <!-- Right Column -->
               <div class="form-card">
                 <div class="form-card-title">Calculated Dimensions</div>
-                <div class="calculated-row">
-                  <span class="calculated-label">Finger Width:</span>
-                  <span class="calculated-value" id="calc-finger-width">-</span>
-                </div>
-                <div class="calculated-row">
-                  <span class="calculated-label">Slot Width:</span>
-                  <span class="calculated-value" id="calc-slot-width">-</span>
-                </div>
-                <div id="preview-container" style="margin-top: 16px;"></div>
+                <div id="legend-container" style="margin-bottom: 16px;"></div>
+                <div id="preview-container"></div>
               </div>
             </div>
           </form>
@@ -451,7 +444,7 @@ export async function onLoad(ctx) {
           const validationRules = isImperial ? {
             boardThickness: { min: 0.1, max: 4, label: 'Board Thickness' },
             boardWidth: { min: 1, max: 48, label: 'Board Width' },
-            fingerCount: { min: 1, max: 20, label: 'Finger Count' },
+            fingerCount: { min: 2, max: 20, label: 'Finger Count', integer: true },
             bitDiameter: { min: 0.1, max: 1, label: 'Bit Diameter' },
             fitTolerance: { min: 0, max: 0.1, label: 'Fit Tolerance' },
             depthPerPass: { min: 0.01, max: 4, label: 'Depth Per Pass' },
@@ -460,7 +453,7 @@ export async function onLoad(ctx) {
           } : {
             boardThickness: { min: 3, max: 100, label: 'Board Thickness' },
             boardWidth: { min: 25, max: 1200, label: 'Board Width' },
-            fingerCount: { min: 1, max: 20, label: 'Finger Count' },
+            fingerCount: { min: 2, max: 20, label: 'Finger Count', integer: true },
             bitDiameter: { min: 3, max: 25, label: 'Bit Diameter' },
             fitTolerance: { min: 0, max: 2, label: 'Fit Tolerance' },
             depthPerPass: { min: 0.5, max: 100, label: 'Depth Per Pass' },
@@ -481,6 +474,13 @@ export async function onLoad(ctx) {
               input.classList.add('input-error');
               if (formGroup) formGroup.classList.add('has-error');
               if (errorDiv) errorDiv.textContent = \`\${rules.label} is required\`;
+              return false;
+            }
+
+            if (rules.integer && !Number.isInteger(value)) {
+              input.classList.add('input-error');
+              if (formGroup) formGroup.classList.add('has-error');
+              if (errorDiv) errorDiv.textContent = \`\${rules.label} must be a whole number\`;
               return false;
             }
 
@@ -559,34 +559,26 @@ export async function onLoad(ctx) {
             const fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
             const pieceType = document.getElementById('pieceType').value;
 
-            const calcFingerWidth = document.getElementById('calc-finger-width');
-            const calcSlotWidth = document.getElementById('calc-slot-width');
-
             if (!isNaN(boardWidth) && !isNaN(fingerCount) && fingerCount > 0) {
               const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
               const boardWidthMetric = convertToMetric(boardWidth);
               const fitToleranceMetric = convertToMetric(fitTolerance || 0);
 
-              // Piece A: fingerCount fingers + (fingerCount-1) slots = fingerCount*fw + (fingerCount-1)*(fw+ft) = bw
-              // Piece B: fingerCount slots + (fingerCount-1) fingers = fingerCount*(fw+ft) + (fingerCount-1)*fw = bw
-              // Both simplify to: (2*fingerCount - 1) * fw + numSlots * ft = bw
-              const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
-              const fingerWidth = (boardWidthMetric - (numSlots * fitToleranceMetric)) / ((fingerCount * 2) - 1);
+              // Both pieces have the same dimensions, just different patterns:
+              // Piece A: fingerCount fingers + (fingerCount-1) slots
+              // Piece B: (fingerCount-1) fingers + fingerCount slots
+              // Both have same total: (2*fingerCount - 1) elements
+              // Total width: fingerCount*fw + (fingerCount-1)*(fw+ft) = bw
+              // Simplify: fingerCount*fw + (fingerCount-1)*fw + (fingerCount-1)*ft = bw
+              // = (2*fingerCount - 1)*fw + (fingerCount-1)*ft = bw
+              const fingerWidth = (boardWidthMetric - ((fingerCount - 1) * fitToleranceMetric)) / ((fingerCount * 2) - 1);
               const slotWidth = fingerWidth + fitToleranceMetric;
-
-              const unit = isImperial ? 'in' : 'mm';
-              const displayFingerWidth = isImperial ? fingerWidth / INCH_TO_MM : fingerWidth;
-              const displaySlotWidth = isImperial ? slotWidth / INCH_TO_MM : slotWidth;
-
-              calcFingerWidth.textContent = \`\${displayFingerWidth.toFixed(3)} \${unit}\`;
-              calcSlotWidth.textContent = \`\${displaySlotWidth.toFixed(3)} \${unit}\`;
 
               // Update preview
               updatePreview(fingerWidth, slotWidth, fingerCount, pieceType);
             } else {
-              calcFingerWidth.textContent = '-';
-              calcSlotWidth.textContent = '-';
               document.getElementById('preview-container').innerHTML = '';
+              document.getElementById('legend-container').innerHTML = '';
             }
 
             // Validate slot vs bit
@@ -596,10 +588,15 @@ export async function onLoad(ctx) {
           // Generate SVG preview of box joints
           function updatePreview(fingerWidth, slotWidth, fingerCount, pieceType) {
             const previewContainer = document.getElementById('preview-container');
-            if (!previewContainer) return;
+            const legendContainer = document.getElementById('legend-container');
+            if (!previewContainer || !legendContainer) return;
 
-            const svgHeight = 380; // Maximize vertical space even more
-            const padding = 0; // Remove padding to use full width
+            // Get board thickness and width from form
+            const boardThickness = parseFloat(document.getElementById('boardThickness').value) || 0;
+            const boardWidthInput = parseFloat(document.getElementById('boardWidth').value) || 0;
+
+            const svgHeight = 380;
+            const padding = 0;
             const availableWidth = previewContainer.offsetWidth - (padding * 2);
 
             // Calculate total width and scale
@@ -608,11 +605,12 @@ export async function onLoad(ctx) {
             const numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
             const numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
             const totalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
-            const scale = availableWidth / totalWidth; // Remove the max scale limit to allow full width
+            const scale = availableWidth / totalWidth;
             const svgWidth = availableWidth + (padding * 2);
 
-            const boardHeight = 340; // Much larger board height
-            const fingerHeight = 25; // Keep finger height constant and smaller
+            const boardHeight = 340;
+            const fingerHeight = 25;
+            const boardTopY = 15;
 
             let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
 
@@ -621,7 +619,8 @@ export async function onLoad(ctx) {
             const textColor = '#6B5538';
 
             // Board base
-            svg += \`<rect x="\${padding}" y="\${svgHeight - boardHeight}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColor}"/>\`;
+            const boardY = boardTopY + fingerHeight;
+            svg += \`<rect x="\${padding}" y="\${boardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColor}"/>\`;
 
             // Draw fingers and slots
             let x = padding;
@@ -639,7 +638,7 @@ export async function onLoad(ctx) {
 
               if (isFinger) {
                 // Draw finger
-                const fingerY = svgHeight - boardHeight - fingerHeight;
+                const fingerY = boardTopY;
                 svg += \`<rect x="\${x}" y="\${fingerY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColor}"/>\`;
               }
               // Slots are just gaps (transparent), no need to draw anything
@@ -648,11 +647,58 @@ export async function onLoad(ctx) {
             }
 
             // Label - centered on the wood board
-            const labelY = svgHeight - (boardHeight / 2) + 5;
+            const labelY = boardY + (boardHeight / 2) + 5;
             svg += \`<text x="\${svgWidth / 2}" y="\${labelY}" text-anchor="middle" fill="\${textColor}" font-size="16" font-weight="600" font-family="system-ui">Piece \${pieceType}</text>\`;
+
+            // Add colored border indicator for board width
+            const boardBottomY = boardY + boardHeight;
+            const stockWidthColor = '#E74C3C'; // Red color for board width
+            svg += \`<line x1="\${padding}" y1="\${boardBottomY}" x2="\${padding + totalWidth * scale}" y2="\${boardBottomY}" stroke="\${stockWidthColor}" stroke-width="5"/>\`;
+
+            // Add colored border indicator for slot width (on first slot from left, at the top)
+            const slotWidthColor = '#3498DB'; // Blue color for slot width
+            const firstSlotStart = pieceType === 'A' ? (padding + fingerWidth * scale) : padding;
+            const firstSlotEnd = firstSlotStart + (slotWidth * scale);
+            const slotTopY = boardY;
+            svg += \`<line x1="\${firstSlotStart}" y1="\${slotTopY}" x2="\${firstSlotEnd}" y2="\${slotTopY}" stroke="\${slotWidthColor}" stroke-width="3"/>\`;
+
+            // Add colored border indicator for board thickness (on right side of first slot, vertical)
+            const boardThicknessColor = '#9B59B6'; // Purple color for board thickness
+            const fingerTopY = boardTopY;
+            svg += \`<line x1="\${firstSlotEnd}" y1="\${fingerTopY}" x2="\${firstSlotEnd}" y2="\${slotTopY}" stroke="\${boardThicknessColor}" stroke-width="3"/>\`;
+
+            // Add colored border indicator for finger width (on top of first finger)
+            const fingerWidthColor = '#2ECC71'; // Green color for finger width
+            const firstFingerStart = pieceType === 'A' ? padding : (padding + slotWidth * scale);
+            const firstFingerEnd = firstFingerStart + (fingerWidth * scale);
+            svg += \`<line x1="\${firstFingerStart}" y1="\${fingerTopY}" x2="\${firstFingerEnd}" y2="\${fingerTopY}" stroke="\${fingerWidthColor}" stroke-width="3"/>\`;
 
             svg += '</svg>';
 
+            // Add legend at the top
+            const unit = 'mm';
+            const legendHTML = \`
+              <div style="font-size: 14px; font-family: system-ui; display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 30px; height: 4px; background: \${stockWidthColor};"></div>
+                  <span style="color: \${stockWidthColor}; font-weight: 500;">Board Width: \${boardWidthInput.toFixed(1)} \${unit}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 30px; height: 4px; background: \${slotWidthColor};"></div>
+                  <span style="color: \${slotWidthColor}; font-weight: 500;">Slot Width: \${slotWidth.toFixed(1)} \${unit}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 30px; height: 4px; background: \${fingerWidthColor};"></div>
+                  <span style="color: \${fingerWidthColor}; font-weight: 500;">Finger Width: \${fingerWidth.toFixed(1)} \${unit}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 30px; height: 4px; background: \${boardThicknessColor};"></div>
+                  <span style="color: \${boardThicknessColor}; font-weight: 500;">Board Thickness: \${boardThickness.toFixed(1)} \${unit}</span>
+                </div>
+              </div>
+            \`;
+
+            legendContainer.innerHTML = legendHTML;
             previewContainer.innerHTML = svg;
           }
 
@@ -670,11 +716,20 @@ export async function onLoad(ctx) {
                   updateCalculatedDimensions();
                 }
               });
+
+              // Block decimal point for integer fields
+              if (validationRules[fieldId].integer) {
+                input.addEventListener('keydown', (e) => {
+                  if (e.key === '.' || e.key === ',') {
+                    e.preventDefault();
+                  }
+                });
+              }
             }
           });
 
           // Add listeners for real-time calculation updates
-          ['boardWidth', 'fingerCount', 'fitTolerance', 'bitDiameter', 'pieceType'].forEach(fieldId => {
+          ['boardWidth', 'boardThickness', 'fingerCount', 'fitTolerance', 'bitDiameter', 'pieceType'].forEach(fieldId => {
             const input = document.getElementById(fieldId);
             if (input) {
               input.addEventListener(fieldId === 'pieceType' ? 'change' : 'input', updateCalculatedDimensions);
