@@ -71,7 +71,8 @@ export async function onLoad(ctx) {
         .form-cards-container {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 20px;
+          column-gap: 12px;
+          row-gap: 20px;
           width: 100%;
           box-sizing: border-box;
         }
@@ -81,7 +82,6 @@ export async function onLoad(ctx) {
           border: 1px solid var(--color-border);
           border-radius: var(--radius-medium);
           padding: 20px;
-          margin-bottom: 20px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.15);
           box-sizing: border-box;
           min-width: 0;
@@ -327,103 +327,108 @@ export async function onLoad(ctx) {
         <div class="form-column">
           <form id="boxjointsForm" novalidate>
             <div class="form-cards-container">
-              <div class="form-card">
-                <div class="form-card-title">Dimensions</div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="boardThickness">Board Thickness (${distanceUnit})</label>
-                    <input type="number" id="boardThickness" step="0.1" value="${settings.boardThickness}" required>
-                    <div class="validation-tooltip" id="boardThickness-error"></div>
+              <!-- Left Column -->
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="form-card">
+                  <div class="form-card-title">Dimensions</div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="boardThickness">Board Thickness (${distanceUnit})</label>
+                      <input type="number" id="boardThickness" step="0.1" value="${settings.boardThickness}" required>
+                      <div class="validation-tooltip" id="boardThickness-error"></div>
+                    </div>
+                    <div class="form-group">
+                      <label for="boardWidth">Board Width (${distanceUnit})</label>
+                      <input type="number" id="boardWidth" step="0.1" value="${settings.boardWidth}" required>
+                      <div class="validation-tooltip" id="boardWidth-error"></div>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label for="boardWidth">Board Width (${distanceUnit})</label>
-                    <input type="number" id="boardWidth" step="0.1" value="${settings.boardWidth}" required>
-                    <div class="validation-tooltip" id="boardWidth-error"></div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="fingerCount">Finger Count</label>
+                      <input type="number" id="fingerCount" step="1" min="1" max="20" value="${settings.fingerCount}" required>
+                      <div class="validation-tooltip" id="fingerCount-error"></div>
+                    </div>
+                    <div class="form-group">
+                      <label for="fitTolerance">Fit Tolerance (${distanceUnit})</label>
+                      <input type="number" id="fitTolerance" step="0.01" value="${settings.fitTolerance}" required>
+                      <div class="validation-tooltip" id="fitTolerance-error"></div>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="pieceType">Piece Type</label>
+                      <select id="pieceType">
+                        <option value="A" ${settings.pieceType === 'A' ? 'selected' : ''}>A (pins)</option>
+                        <option value="B" ${settings.pieceType === 'B' ? 'selected' : ''}>B (tails)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="depthPerPass">Depth Per Pass (${distanceUnit})</label>
+                      <input type="number" id="depthPerPass" step="0.1" value="${settings.depthPerPass}" required>
+                      <div class="validation-tooltip" id="depthPerPass-error"></div>
+                    </div>
                   </div>
                 </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="fingerCount">Finger Count</label>
-                    <input type="number" id="fingerCount" step="1" min="1" max="20" value="${settings.fingerCount}" required>
-                    <div class="validation-tooltip" id="fingerCount-error"></div>
+
+                <div class="form-card">
+                  <div class="form-card-title">Machine Settings</div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="bitDiameter">Bit Diameter (${distanceUnit})</label>
+                      <input type="number" id="bitDiameter" step="0.01" value="${settings.bitDiameter}" required>
+                      <div class="validation-tooltip" id="bitDiameter-error"></div>
+                    </div>
+                    <div class="form-group">
+                      <label for="feedRate">Feed Rate (${feedRateUnit})</label>
+                      <input type="number" id="feedRate" step="1" value="${settings.feedRate}" required>
+                      <div class="validation-tooltip" id="feedRate-error"></div>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label for="fitTolerance">Fit Tolerance (${distanceUnit})</label>
-                    <input type="number" id="fitTolerance" step="0.01" value="${settings.fitTolerance}" required>
-                    <div class="validation-tooltip" id="fitTolerance-error"></div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="spindleRpm">Spindle RPM</label>
+                      <input type="number" id="spindleRpm" step="1" value="${settings.spindleRpm}" required>
+                      <div class="validation-tooltip" id="spindleRpm-error"></div>
+                    </div>
+                    <div class="form-group">
+                      <label for="spindleDelay">Spindle Delay (s)</label>
+                      <input type="number" id="spindleDelay" min="0" max="30" step="1" value="${settings.spindleDelay}">
+                    </div>
                   </div>
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="pieceType">Piece Type</label>
-                    <select id="pieceType">
-                      <option value="A" ${settings.pieceType === 'A' ? 'selected' : ''}>A (pins)</option>
-                      <option value="B" ${settings.pieceType === 'B' ? 'selected' : ''}>B (tails)</option>
-                    </select>
+                  <div class="form-row coolant-row">
+                    <div class="coolant-label">Mist Coolant</div>
+                    <div class="coolant-control">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="mistM7" ${settings.mistM7 ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
                   </div>
-                  <div class="form-group">
-                    <label for="depthPerPass">Depth Per Pass (${distanceUnit})</label>
-                    <input type="number" id="depthPerPass" step="0.1" value="${settings.depthPerPass}" required>
-                    <div class="validation-tooltip" id="depthPerPass-error"></div>
+                  <div class="form-row coolant-row">
+                    <div class="coolant-label">Flood Coolant</div>
+                    <div class="coolant-control">
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="floodM8" ${settings.floodM8 ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
                   </div>
-                </div>
-                <div class="calculated-info">
-                  <div class="calculated-info-title">Calculated Dimensions</div>
-                  <div class="calculated-row">
-                    <span class="calculated-label">Finger Width:</span>
-                    <span class="calculated-value" id="calc-finger-width">-</span>
-                  </div>
-                  <div class="calculated-row">
-                    <span class="calculated-label">Slot Width:</span>
-                    <span class="calculated-value" id="calc-slot-width">-</span>
-                  </div>
-                  <div id="preview-container" style="margin-top: 16px; padding: 12px; background: var(--color-surface-muted); border-radius: var(--radius-small);"></div>
                 </div>
               </div>
 
+              <!-- Right Column -->
               <div class="form-card">
-                <div class="form-card-title">Machine Settings</div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="bitDiameter">Bit Diameter (${distanceUnit})</label>
-                    <input type="number" id="bitDiameter" step="0.01" value="${settings.bitDiameter}" required>
-                    <div class="validation-tooltip" id="bitDiameter-error"></div>
-                  </div>
-                  <div class="form-group">
-                    <label for="feedRate">Feed Rate (${feedRateUnit})</label>
-                    <input type="number" id="feedRate" step="1" value="${settings.feedRate}" required>
-                    <div class="validation-tooltip" id="feedRate-error"></div>
-                  </div>
+                <div class="form-card-title">Calculated Dimensions</div>
+                <div class="calculated-row">
+                  <span class="calculated-label">Finger Width:</span>
+                  <span class="calculated-value" id="calc-finger-width">-</span>
                 </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label for="spindleRpm">Spindle RPM</label>
-                    <input type="number" id="spindleRpm" step="1" value="${settings.spindleRpm}" required>
-                    <div class="validation-tooltip" id="spindleRpm-error"></div>
-                  </div>
-                  <div class="form-group">
-                    <label for="spindleDelay">Spindle Delay (s)</label>
-                    <input type="number" id="spindleDelay" min="0" max="30" step="1" value="${settings.spindleDelay}">
-                  </div>
+                <div class="calculated-row">
+                  <span class="calculated-label">Slot Width:</span>
+                  <span class="calculated-value" id="calc-slot-width">-</span>
                 </div>
-                <div class="form-row coolant-row">
-                  <div class="coolant-label">Mist Coolant</div>
-                  <div class="coolant-control">
-                    <label class="toggle-switch">
-                      <input type="checkbox" id="mistM7" ${settings.mistM7 ? 'checked' : ''}>
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-                <div class="form-row coolant-row">
-                  <div class="coolant-label">Flood Coolant</div>
-                  <div class="coolant-control">
-                    <label class="toggle-switch">
-                      <input type="checkbox" id="floodM8" ${settings.floodM8 ? 'checked' : ''}>
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
+                <div id="preview-container" style="margin-top: 16px;"></div>
               </div>
             </div>
           </form>
@@ -593,8 +598,8 @@ export async function onLoad(ctx) {
             const previewContainer = document.getElementById('preview-container');
             if (!previewContainer) return;
 
-            const svgHeight = 80;
-            const padding = 10;
+            const svgHeight = 380; // Maximize vertical space even more
+            const padding = 0; // Remove padding to use full width
             const availableWidth = previewContainer.offsetWidth - (padding * 2);
 
             // Calculate total width and scale
@@ -603,11 +608,11 @@ export async function onLoad(ctx) {
             const numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
             const numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
             const totalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
-            const scale = Math.min(availableWidth / totalWidth, 2);
-            const svgWidth = totalWidth * scale + (padding * 2);
+            const scale = availableWidth / totalWidth; // Remove the max scale limit to allow full width
+            const svgWidth = availableWidth + (padding * 2);
 
-            const boardHeight = 50;
-            const fingerHeight = 15;
+            const boardHeight = 340; // Much larger board height
+            const fingerHeight = 25; // Keep finger height constant and smaller
 
             let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
 
