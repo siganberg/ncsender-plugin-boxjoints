@@ -715,17 +715,21 @@ export async function onLoad(ctx) {
               gcode.push(\`; === Slot \${i + 1} ===\`);
               gcode.push('');
 
+              // Box spiral parameters
+              const frontY = -extraTravelY;
+              const backY = bt + extraTravelY;
+              const startLeftX = slotStart + bitRadius;
+              const startRightX = slotEnd - bitRadius;
+
               // For each depth pass (layer by layer)
               for (let pass = 0; pass < numPasses; pass++) {
                 const depth = -Math.min((pass + 1) * dpp, bt);
 
                 gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Box spiral: X shrinks inward, Y always full length
-                const frontY = -extraTravelY;
-                const backY = bt + extraTravelY;
-                let leftX = slotStart + bitRadius;
-                let rightX = slotEnd - bitRadius;
+                // Reset X positions for each layer
+                let leftX = startLeftX;
+                let rightX = startRightX;
 
                 // Position to start of layer
                 if (pass === 0) {
@@ -733,7 +737,8 @@ export async function onLoad(ctx) {
                   gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
                 } else {
-                  // Subsequent layers: already past material, just plunge deeper
+                  // Subsequent layers: move back to start, then plunge deeper
+                  gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
                 }
 
