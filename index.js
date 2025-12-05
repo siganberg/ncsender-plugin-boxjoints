@@ -683,8 +683,7 @@ export async function onLoad(ctx) {
             // Calculate number of passes needed
             const numPasses = Math.ceil(bt / dpp);
 
-            gcode.push('G0 Z5.0 ; Move to safe height');
-            gcode.push('G0 X0 Y0 ; Move to start position');
+            gcode.push('G53 G0 Z0 ; Move to machine Z0 (safe height)');
             gcode.push('');
 
             // Calculate bit and stepover parameters
@@ -773,8 +772,7 @@ export async function onLoad(ctx) {
             }
 
             // Footer
-            gcode.push('G0 Z5.0 ; Safe height');
-            gcode.push('G0 X0 Y0 ; Return to origin');
+            gcode.push('G53 G0 Z0 ; Retract to machine Z0');
             if (mistM7 || floodM8) gcode.push('M9 ; Coolant off');
             if (spindleRpm > 0) gcode.push('M5 ; Spindle off');
             gcode.push('M30 ; Program end');
