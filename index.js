@@ -508,6 +508,7 @@ export async function onLoad(ctx) {
             const fingerCount = parseInt(document.getElementById('fingerCount').value);
             const fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
             const bitDiameter = parseFloat(document.getElementById('bitDiameter').value);
+            const pieceType = document.getElementById('pieceType').value;
 
             const fingerCountInput = document.getElementById('fingerCount');
             const fingerCountErrorDiv = document.getElementById('fingerCount-error');
@@ -526,7 +527,8 @@ export async function onLoad(ctx) {
             const boardWidthMetric = convertToMetric(boardWidth);
             const bitDiameterMetric = convertToMetric(bitDiameter);
             const fitToleranceMetric = convertToMetric(fitTolerance || 0);
-            const calculatedFingerWidth = boardWidthMetric / (fingerCount * 2);
+            const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
+            const calculatedFingerWidth = (boardWidthMetric - (numSlots * fitToleranceMetric)) / ((fingerCount * 2) - 1);
             const calculatedSlotWidth = calculatedFingerWidth + fitToleranceMetric;
 
             if (calculatedSlotWidth < bitDiameterMetric) {
@@ -549,6 +551,7 @@ export async function onLoad(ctx) {
             const boardWidth = parseFloat(document.getElementById('boardWidth').value);
             const fingerCount = parseInt(document.getElementById('fingerCount').value);
             const fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
+            const pieceType = document.getElementById('pieceType').value;
 
             const calcFingerWidth = document.getElementById('calc-finger-width');
             const calcSlotWidth = document.getElementById('calc-slot-width');
@@ -558,7 +561,11 @@ export async function onLoad(ctx) {
               const boardWidthMetric = convertToMetric(boardWidth);
               const fitToleranceMetric = convertToMetric(fitTolerance || 0);
 
-              const fingerWidth = boardWidthMetric / ((fingerCount * 2) - 1);
+              // Piece A: fingerCount fingers + (fingerCount-1) slots = fingerCount*fw + (fingerCount-1)*(fw+ft) = bw
+              // Piece B: fingerCount slots + (fingerCount-1) fingers = fingerCount*(fw+ft) + (fingerCount-1)*fw = bw
+              // Both simplify to: (2*fingerCount - 1) * fw + numSlots * ft = bw
+              const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
+              const fingerWidth = (boardWidthMetric - (numSlots * fitToleranceMetric)) / ((fingerCount * 2) - 1);
               const slotWidth = fingerWidth + fitToleranceMetric;
 
               const unit = isImperial ? 'in' : 'mm';
@@ -594,10 +601,10 @@ export async function onLoad(ctx) {
           });
 
           // Add listeners for real-time calculation updates
-          ['boardWidth', 'fingerCount', 'fitTolerance', 'bitDiameter'].forEach(fieldId => {
+          ['boardWidth', 'fingerCount', 'fitTolerance', 'bitDiameter', 'pieceType'].forEach(fieldId => {
             const input = document.getElementById(fieldId);
             if (input) {
-              input.addEventListener('input', updateCalculatedDimensions);
+              input.addEventListener(fieldId === 'pieceType' ? 'change' : 'input', updateCalculatedDimensions);
             }
           });
 
@@ -630,10 +637,12 @@ export async function onLoad(ctx) {
             const fr = convertToMetric(feedRate);
 
             // Calculate finger width from board width and finger count
-            // Piece A: fingerCount fingers + (fingerCount - 1) slots
-            // Piece B: (fingerCount - 1) fingers + fingerCount slots
-            // Total segments = fingerCount + (fingerCount - 1) = (2 * fingerCount) - 1
-            const fw = bw / ((fingerCount * 2) - 1);
+            // Piece A: fingerCount fingers + (fingerCount-1) slots = fingerCount*fw + (fingerCount-1)*(fw+ft) = bw
+            // Piece B: fingerCount slots + (fingerCount-1) fingers = fingerCount*(fw+ft) + (fingerCount-1)*fw = bw
+            // Both simplify to: (2*fingerCount - 1) * fw + numSlots * ft = bw
+            // Determine number of slots based on piece type
+            const numSlotsForCalc = pieceType === 'A' ? fingerCount - 1 : fingerCount;
+            const fw = (bw - (numSlotsForCalc * ft)) / ((fingerCount * 2) - 1);
 
             const gcode = [];
 
@@ -664,12 +673,12 @@ export async function onLoad(ctx) {
 
             // Slot width should equal finger width + tolerance
             const slotWidth = fw + ft;
-            const numFingers = fingerCount;
 
-            // Determine starting offset based on piece type
-            // Piece A starts with a finger (so first slot is at fw)
-            // Piece B starts with a slot (so first slot is at 0)
+            // Determine starting offset and number of slots based on piece type
+            // Piece A: starts with finger, ends with finger → (fingerCount - 1) slots
+            // Piece B: starts with slot, ends with slot → fingerCount slots
             const startOffset = pieceType === 'A' ? fw : 0;
+            const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
 
             // Calculate number of passes needed
             const numPasses = Math.ceil(bt / dpp);
@@ -681,7 +690,9 @@ export async function onLoad(ctx) {
             // Calculate bit and stepover parameters
             const bitRadius = bd / 2;
             const stepOver = bd * 0.4; // 40% stepover for better coverage
-            const extraTravel = 5 + bitRadius; // Extra travel beyond material face
+            const extraTravelY = 5 + bitRadius; // Extra travel beyond material face on Y axis
+            const extraTravelX = bitRadius; // Extra travel on X axis to ensure clean edges
+            const exitSlowdownZone = 3; // Slow down 3mm before exit to prevent tearout
 
             // Calculate how many X passes needed to clear slot width
             let numXPasses;
@@ -693,13 +704,20 @@ export async function onLoad(ctx) {
             }
 
             // Process each slot completely (all depth layers)
-            for (let i = 0; i < numFingers; i++) {
+            for (let i = 0; i < numSlots; i++) {
               // Each finger+slot pair takes up (fw + slotWidth) = (fw + fw + ft) = 2*fw + ft
               const slotStart = startOffset + (i * (fw + slotWidth));
               const slotEnd = slotStart + slotWidth;
 
-              // Skip if slot goes beyond board width
-              if (slotEnd > bw) break;
+              // Skip if slot goes significantly beyond board width (allow small rounding errors)
+              if (slotEnd > bw + 0.2) break;
+
+              // Extra travel on X axis only for Piece B (which starts/ends with slots)
+              // First slot: add left travel, Last slot: add right travel
+              const isFirstSlot = i === 0;
+              const isLastSlot = i === numSlots - 1;
+              const leftTravel = (pieceType === 'B' && isFirstSlot) ? extraTravelX : 0;
+              const rightTravel = (pieceType === 'B' && isLastSlot) ? extraTravelX : 0;
 
               gcode.push(\`; === Slot \${i + 1} ===\`);
               gcode.push('');
@@ -710,18 +728,19 @@ export async function onLoad(ctx) {
 
                 gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Move to slot start position (bit center at left edge) with extra travel on -Y side
-                const firstXPos = slotStart + bitRadius;
-                gcode.push(\`G0 X\${firstXPos.toFixed(3)} Y\${(-extraTravel).toFixed(3)}\`);
+                // Move to slot start position with extra travel on -Y side (and X if Piece B edge slot)
+                // Position bit center so bit edge aligns with slot edge (accounting for extra travel)
+                const firstXPos = slotStart + bitRadius - leftTravel;
+                gcode.push(\`G0 X\${firstXPos.toFixed(3)} Y\${(-extraTravelY).toFixed(3)}\`);
 
                 // Rapid plunge to depth (safe since we're away from material)
                 gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
 
                 // Zigzag across the slot width to clear it
-                let currentY = -extraTravel; // Start position with extra travel on -Y side
+                let currentY = -extraTravelY; // Start position with extra travel on -Y side
                 for (let xPass = 0; xPass < numXPasses; xPass++) {
-                  const xOffset = slotStart + bitRadius + (xPass * stepOver);
-                  const xPos = Math.min(xOffset, slotEnd - bitRadius);
+                  const xOffset = slotStart + bitRadius - leftTravel + (xPass * stepOver);
+                  const xPos = Math.min(xOffset, slotEnd - bitRadius + rightTravel);
 
                   // Move to X position (skip on first pass since we positioned during G0)
                   if (xPass > 0) {
@@ -733,8 +752,21 @@ export async function onLoad(ctx) {
                   const cuttingFeedRate = xPass === 0 && currentY < 0 ? (fr * 0.7).toFixed(1) : fr.toFixed(1);
 
                   // Alternate Y direction (zigzag) with extra travel on both sides
-                  const targetY = currentY < 0 ? bt + extraTravel : -extraTravel;
-                  gcode.push(\`G1 Y\${targetY.toFixed(3)} F\${cuttingFeedRate}\`);
+                  const targetY = currentY < 0 ? bt + extraTravelY : -extraTravelY;
+
+                  // Check if we're exiting the material (approaching bt from below or 0 from above)
+                  const isExiting = (currentY < bt && targetY > 0) || (currentY > 0 && targetY < bt);
+
+                  if (isExiting) {
+                    // Slow down before exit to prevent tearout
+                    const slowdownPoint = currentY < bt ? bt - exitSlowdownZone : exitSlowdownZone;
+                    gcode.push(\`G1 Y\${slowdownPoint.toFixed(3)} F\${cuttingFeedRate}\`);
+                    // Reduce speed to 10% for exit zone to prevent tearout
+                    gcode.push(\`G1 Y\${targetY.toFixed(3)} F\${(fr * 0.1).toFixed(1)}\`);
+                  } else {
+                    gcode.push(\`G1 Y\${targetY.toFixed(3)} F\${cuttingFeedRate}\`);
+                  }
+
                   currentY = targetY;
                 }
 
