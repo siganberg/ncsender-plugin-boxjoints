@@ -727,9 +727,15 @@ export async function onLoad(ctx) {
                 let leftX = slotStart + bitRadius;
                 let rightX = slotEnd - bitRadius;
 
-                // Start at left edge, back
-                gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
-                gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+                // Position to start of layer
+                if (pass === 0) {
+                  // First layer: rapid position and plunge
+                  gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
+                  gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+                } else {
+                  // Subsequent layers: already past material, just plunge deeper
+                  gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+                }
 
                 // Spiral: back-front, right, front-back, left(inward), repeat
                 while (leftX < rightX) {
@@ -752,10 +758,11 @@ export async function onLoad(ctx) {
                   gcode.push(\`G1 X\${leftX.toFixed(3)}\`);
                 }
 
-                // Retract after this layer
-                gcode.push('G0 Z5.0');
                 gcode.push('');
               }
+
+              // Z-hop after all layers complete before moving to next slot
+              gcode.push('G0 Z5.0');
 
               gcode.push('');
             }
