@@ -721,44 +721,35 @@ export async function onLoad(ctx) {
 
                 gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Move to slot start position
-                const firstXPos = slotStart + bitRadius;
-                gcode.push(\`G0 X\${firstXPos.toFixed(3)} Y\${(-extraTravelY).toFixed(3)}\`);
+                // Box spiral: X shrinks inward, Y always full length
+                const frontY = -extraTravelY;
+                const backY = bt + extraTravelY;
+                let leftX = slotStart + bitRadius;
+                let rightX = slotEnd - bitRadius;
 
-                // Rapid plunge to depth
+                // Start at left edge, back
+                gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
                 gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
 
-                // Zigzag across the slot width to clear it
-                let currentY = -extraTravelY;
-                for (let xPass = 0; xPass < numXPasses; xPass++) {
-                  const xOffset = slotStart + bitRadius + (xPass * stepOver);
-                  const xPos = Math.min(xOffset, slotEnd - bitRadius);
+                // Spiral: back-front, right, front-back, left(inward), repeat
+                while (leftX < rightX) {
+                  // Left edge: back to front
+                  gcode.push(\`G1 Y\${frontY.toFixed(3)} F\${fr.toFixed(1)}\`);
 
-                  if (xPass > 0) {
-                    gcode.push(\`G1 X\${xPos.toFixed(3)} F\${fr.toFixed(1)}\`);
-                  }
+                  // Move to right edge
+                  gcode.push(\`G1 X\${rightX.toFixed(3)}\`);
 
-                  // First cut into solid material uses reduced feed rate (70% - reduced by 30%)
-                  // All other cuts are at 100% feed rate
-                  const cuttingFeedRate = xPass === 0 && currentY < 0 ? (fr * 0.7).toFixed(1) : fr.toFixed(1);
+                  // Right edge: front to back
+                  gcode.push(\`G1 Y\${backY.toFixed(3)}\`);
 
-                  // Alternate Y direction (zigzag) with extra travel on both sides
-                  const targetY = currentY < 0 ? bt + extraTravelY : -extraTravelY;
+                  // Step both edges inward
+                  leftX += stepOver;
+                  rightX -= stepOver;
 
-                  // Check if we're exiting the material (approaching bt from below or 0 from above)
-                  const isExiting = (currentY < bt && targetY > 0) || (currentY > 0 && targetY < bt);
+                  if (leftX >= rightX) break;
 
-                  if (isExiting) {
-                    // Slow down before exit to prevent tearout
-                    const slowdownPoint = currentY < bt ? bt - exitSlowdownZone : exitSlowdownZone;
-                    gcode.push(\`G1 Y\${slowdownPoint.toFixed(3)} F\${cuttingFeedRate}\`);
-                    // Reduce speed to 10% for exit zone to prevent tearout
-                    gcode.push(\`G1 Y\${targetY.toFixed(3)} F\${(fr * 0.1).toFixed(1)}\`);
-                  } else {
-                    gcode.push(\`G1 Y\${targetY.toFixed(3)} F\${cuttingFeedRate}\`);
-                  }
-
-                  currentY = targetY;
+                  // Move to left edge (now inward)
+                  gcode.push(\`G1 X\${leftX.toFixed(3)}\`);
                 }
 
                 // Retract after this layer
