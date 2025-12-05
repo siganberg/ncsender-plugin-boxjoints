@@ -712,13 +712,6 @@ export async function onLoad(ctx) {
               // Skip if slot goes significantly beyond board width (allow small rounding errors)
               if (slotEnd > bw + 0.2) break;
 
-              // Extra travel on X axis only for Piece B (which starts/ends with slots)
-              // First slot: add left travel, Last slot: add right travel
-              const isFirstSlot = i === 0;
-              const isLastSlot = i === numSlots - 1;
-              const leftTravel = (pieceType === 'B' && isFirstSlot) ? extraTravelX : 0;
-              const rightTravel = (pieceType === 'B' && isLastSlot) ? extraTravelX : 0;
-
               gcode.push(\`; === Slot \${i + 1} ===\`);
               gcode.push('');
 
@@ -728,21 +721,19 @@ export async function onLoad(ctx) {
 
                 gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Move to slot start position with extra travel on -Y side (and X if Piece B edge slot)
-                // Position bit center so bit edge aligns with slot edge (accounting for extra travel)
-                const firstXPos = slotStart + bitRadius - leftTravel;
+                // Move to slot start position
+                const firstXPos = slotStart + bitRadius;
                 gcode.push(\`G0 X\${firstXPos.toFixed(3)} Y\${(-extraTravelY).toFixed(3)}\`);
 
-                // Rapid plunge to depth (safe since we're away from material)
+                // Rapid plunge to depth
                 gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
 
                 // Zigzag across the slot width to clear it
-                let currentY = -extraTravelY; // Start position with extra travel on -Y side
+                let currentY = -extraTravelY;
                 for (let xPass = 0; xPass < numXPasses; xPass++) {
-                  const xOffset = slotStart + bitRadius - leftTravel + (xPass * stepOver);
-                  const xPos = Math.min(xOffset, slotEnd - bitRadius + rightTravel);
+                  const xOffset = slotStart + bitRadius + (xPass * stepOver);
+                  const xPos = Math.min(xOffset, slotEnd - bitRadius);
 
-                  // Move to X position (skip on first pass since we positioned during G0)
                   if (xPass > 0) {
                     gcode.push(\`G1 X\${xPos.toFixed(3)} F\${fr.toFixed(1)}\`);
                   }
