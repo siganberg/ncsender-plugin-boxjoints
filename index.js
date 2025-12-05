@@ -558,7 +558,7 @@ export async function onLoad(ctx) {
               const boardWidthMetric = convertToMetric(boardWidth);
               const fitToleranceMetric = convertToMetric(fitTolerance || 0);
 
-              const fingerWidth = boardWidthMetric / (fingerCount * 2);
+              const fingerWidth = boardWidthMetric / ((fingerCount * 2) - 1);
               const slotWidth = fingerWidth + fitToleranceMetric;
 
               const unit = isImperial ? 'in' : 'mm';
@@ -630,8 +630,10 @@ export async function onLoad(ctx) {
             const fr = convertToMetric(feedRate);
 
             // Calculate finger width from board width and finger count
-            // Total pattern = fingerCount fingers + fingerCount slots = fingerCount * 2
-            const fw = bw / (fingerCount * 2);
+            // Piece A: fingerCount fingers + (fingerCount - 1) slots
+            // Piece B: (fingerCount - 1) fingers + fingerCount slots
+            // Total segments = fingerCount + (fingerCount - 1) = (2 * fingerCount) - 1
+            const fw = bw / ((fingerCount * 2) - 1);
 
             const gcode = [];
 
@@ -660,13 +662,14 @@ export async function onLoad(ctx) {
             }
             gcode.push('');
 
-            // Slot width includes tolerance
-            const slotWidth = fw + ft; // Add tolerance to slot width
+            // Slot width should equal finger width + tolerance
+            const slotWidth = fw + ft;
             const numFingers = fingerCount;
 
             // Determine starting offset based on piece type
-            // Piece A starts with a finger, Piece B starts with a slot
-            const startOffset = pieceType === 'B' ? fw : 0;
+            // Piece A starts with a finger (so first slot is at fw)
+            // Piece B starts with a slot (so first slot is at 0)
+            const startOffset = pieceType === 'A' ? fw : 0;
 
             // Calculate number of passes needed
             const numPasses = Math.ceil(bt / dpp);
@@ -675,68 +678,69 @@ export async function onLoad(ctx) {
             gcode.push('G0 X0 Y0 ; Move to start position');
             gcode.push('');
 
-            // Cut each slot
+            // Calculate bit and stepover parameters
+            const bitRadius = bd / 2;
+            const stepOver = bd * 0.4; // 40% stepover for better coverage
+            const extraTravel = 5 + bitRadius; // Extra travel beyond material face
+
+            // Calculate how many X passes needed to clear slot width
+            let numXPasses;
+            if (slotWidth <= bd) {
+              numXPasses = 1;
+            } else {
+              const remainingWidth = slotWidth - bd;
+              numXPasses = 1 + Math.ceil(remainingWidth / stepOver);
+            }
+
+            // Process each slot completely (all depth layers)
             for (let i = 0; i < numFingers; i++) {
-              const slotStart = startOffset + (i * fw * 2);
+              // Each finger+slot pair takes up (fw + slotWidth) = (fw + fw + ft) = 2*fw + ft
+              const slotStart = startOffset + (i * (fw + slotWidth));
               const slotEnd = slotStart + slotWidth;
 
               // Skip if slot goes beyond board width
               if (slotEnd > bw) break;
 
-              gcode.push(\`; Slot \${i + 1}\`);
+              gcode.push(\`; === Slot \${i + 1} ===\`);
+              gcode.push('');
 
-              // Calculate number of passes across slot width (X-axis)
-              const bitRadius = bd / 2;
-              const stepOver = bd * 0.4; // 40% stepover for better coverage
-
-              // Calculate how many passes needed to cover the slot width
-              // If slot is smaller than bit, 1 pass. Otherwise calculate based on stepover
-              let numXPasses;
-              if (slotWidth <= bd) {
-                numXPasses = 1;
-              } else {
-                // Number of passes = 1 (first pass) + ceil of remaining width / stepover
-                const remainingWidth = slotWidth - bd;
-                numXPasses = 1 + Math.ceil(remainingWidth / stepOver);
-              }
-
-              // For each depth pass (Z-axis)
+              // For each depth pass (layer by layer)
               for (let pass = 0; pass < numPasses; pass++) {
                 const depth = -Math.min((pass + 1) * dpp, bt);
 
-                gcode.push(\`; Pass \${pass + 1} at depth \${depth.toFixed(3)} (\${numXPasses} horizontal passes)\`);
+                gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Zigzag pattern across the slot width
+                // Move to slot start position (bit center at left edge) with extra travel on -Y side
+                const firstXPos = slotStart + bitRadius;
+                gcode.push(\`G0 X\${firstXPos.toFixed(3)} Y\${(-extraTravel).toFixed(3)}\`);
+
+                // Rapid plunge to depth (safe since we're away from material)
+                gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+
+                // Zigzag across the slot width to clear it
+                let currentY = -extraTravel; // Start position with extra travel on -Y side
                 for (let xPass = 0; xPass < numXPasses; xPass++) {
-                  // Calculate X position for this pass
-                  // Start at slot edge + bit radius, then step over
                   const xOffset = slotStart + bitRadius + (xPass * stepOver);
-
-                  // Clamp to slot boundaries
                   const xPos = Math.min(xOffset, slotEnd - bitRadius);
 
-                  // Position above this X position
-                  gcode.push(\`G0 X\${xPos.toFixed(3)} Y0\`);
-
-                  // Plunge to depth on first pass only
-                  if (xPass === 0) {
-                    gcode.push(\`G1 Z\${depth.toFixed(3)} F\${(fr / 2).toFixed(1)}\`);
+                  // Move to X position (skip on first pass since we positioned during G0)
+                  if (xPass > 0) {
+                    gcode.push(\`G1 X\${xPos.toFixed(3)} F\${fr.toFixed(1)}\`);
                   }
 
-                  // Cut forward along Y-axis
-                  gcode.push(\`G1 Y\${bt.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  // First cut into solid material uses reduced feed rate (70% - reduced by 30%)
+                  // All other cuts are at 100% feed rate
+                  const cuttingFeedRate = xPass === 0 && currentY < 0 ? (fr * 0.7).toFixed(1) : fr.toFixed(1);
 
-                  // Move to next X position and cut backward (zigzag) if not last pass
-                  if (xPass < numXPasses - 1) {
-                    const nextX = Math.min(slotStart + bitRadius + ((xPass + 1) * stepOver), slotEnd - bitRadius);
-                    gcode.push(\`G1 X\${nextX.toFixed(3)}\`);
-                    // Cut backward along Y-axis (zigzag)
-                    gcode.push(\`G1 Y0 F\${fr.toFixed(1)}\`);
-                  }
+                  // Alternate Y direction (zigzag) with extra travel on both sides
+                  const targetY = currentY < 0 ? bt + extraTravel : -extraTravel;
+                  gcode.push(\`G1 Y\${targetY.toFixed(3)} F\${cuttingFeedRate}\`);
+                  currentY = targetY;
                 }
 
-                // Retract
+                // Retract after this layer
                 gcode.push('G0 Z5.0');
+                gcode.push('');
               }
 
               gcode.push('');
