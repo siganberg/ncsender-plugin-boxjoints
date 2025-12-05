@@ -377,6 +377,7 @@ export async function onLoad(ctx) {
                     <span class="calculated-label">Slot Width:</span>
                     <span class="calculated-value" id="calc-slot-width">-</span>
                   </div>
+                  <div id="preview-container" style="margin-top: 16px; padding: 12px; background: var(--color-surface-muted); border-radius: var(--radius-small);"></div>
                 </div>
               </div>
 
@@ -574,13 +575,80 @@ export async function onLoad(ctx) {
 
               calcFingerWidth.textContent = \`\${displayFingerWidth.toFixed(3)} \${unit}\`;
               calcSlotWidth.textContent = \`\${displaySlotWidth.toFixed(3)} \${unit}\`;
+
+              // Update preview
+              updatePreview(fingerWidth, slotWidth, fingerCount, pieceType);
             } else {
               calcFingerWidth.textContent = '-';
               calcSlotWidth.textContent = '-';
+              document.getElementById('preview-container').innerHTML = '';
             }
 
             // Validate slot vs bit
             validateSlotVsBit();
+          }
+
+          // Generate SVG preview of box joints
+          function updatePreview(fingerWidth, slotWidth, fingerCount, pieceType) {
+            const previewContainer = document.getElementById('preview-container');
+            if (!previewContainer) return;
+
+            const svgHeight = 80;
+            const padding = 10;
+            const availableWidth = previewContainer.offsetWidth - (padding * 2);
+
+            // Calculate total width and scale
+            // Piece A: fingerCount fingers, (fingerCount-1) slots
+            // Piece B: (fingerCount-1) fingers, fingerCount slots
+            const numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
+            const numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
+            const totalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
+            const scale = Math.min(availableWidth / totalWidth, 2);
+            const svgWidth = totalWidth * scale + (padding * 2);
+
+            const boardHeight = 50;
+            const fingerHeight = 15;
+
+            let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
+
+            // Wood color
+            const woodColor = '#D4A574';
+            const textColor = '#6B5538';
+
+            // Board base
+            svg += \`<rect x="\${padding}" y="\${svgHeight - boardHeight}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColor}"/>\`;
+
+            // Draw fingers and slots
+            let x = padding;
+
+            // Piece A: fingerCount fingers, (fingerCount-1) slots
+            // Piece B: (fingerCount-1) fingers, fingerCount slots
+            // Total elements = 2*fingerCount - 1
+            const totalElements = (2 * fingerCount) - 1;
+
+            for (let i = 0; i < totalElements; i++) {
+              // Piece A: starts with finger (even indices are fingers)
+              // Piece B: starts with slot (even indices are slots)
+              const isFinger = pieceType === 'A' ? (i % 2 === 0) : (i % 2 === 1);
+              const width = (isFinger ? fingerWidth : slotWidth) * scale;
+
+              if (isFinger) {
+                // Draw finger
+                const fingerY = svgHeight - boardHeight - fingerHeight;
+                svg += \`<rect x="\${x}" y="\${fingerY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColor}"/>\`;
+              }
+              // Slots are just gaps (transparent), no need to draw anything
+
+              x += width;
+            }
+
+            // Label - centered on the wood board
+            const labelY = svgHeight - (boardHeight / 2) + 5;
+            svg += \`<text x="\${svgWidth / 2}" y="\${labelY}" text-anchor="middle" fill="\${textColor}" font-size="16" font-weight="600" font-family="system-ui">Piece \${pieceType}</text>\`;
+
+            svg += '</svg>';
+
+            previewContainer.innerHTML = svg;
           }
 
           // Add validation on blur for each input
