@@ -6,7 +6,7 @@
   "author": "ncSender",
   "description": "Box joints generator for CNC",
   "entry": "index.js",
-  "icon": "icon.svg",
+  "icon": "logo.png",
   "category": "gcode-generator",
   "repository": "",
   "events": [],

@@ -854,40 +854,56 @@ export async function onLoad(ctx) {
 
                 gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Reset X positions for each layer
-                let leftX = startLeftX;
-                let rightX = startRightX;
+                // Start from center and spiral outward
+                const centerX = (startLeftX + startRightX) / 2;
+                const totalSpan = startRightX - startLeftX;
 
-                // Position to start of layer
+                // Calculate how many steps we need from center to edges
+                const stepsToEdge = Math.ceil(totalSpan / (2 * stepOver));
+
+                // Start at center
+                let leftX = centerX;
+                let rightX = centerX;
+
+                // Position to start of layer (center)
                 if (pass === 0) {
                   // First layer: rapid position and plunge
-                  gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
+                  gcode.push(\`G0 X\${centerX.toFixed(3)} Y\${backY.toFixed(3)}\`);
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
                 } else {
-                  // Subsequent layers: move back to start, then plunge deeper
-                  gcode.push(\`G0 X\${leftX.toFixed(3)} Y\${backY.toFixed(3)}\`);
+                  // Subsequent layers: move back to center, then plunge deeper
+                  gcode.push(\`G0 X\${centerX.toFixed(3)} Y\${backY.toFixed(3)}\`);
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
                 }
 
-                // Spiral: back-front, right, front-back, left(inward), repeat
-                while (leftX < rightX) {
-                  // Left edge: back to front
-                  gcode.push(\`G1 Y\${frontY.toFixed(3)} F\${fr.toFixed(1)}\`);
+                // Spiral outward from center (climb milling)
+                // Pattern: back-front (center), right, front-back, left, back-front, repeat
+                let currentX = centerX;
 
-                  // Move to right edge
-                  gcode.push(\`G1 X\${rightX.toFixed(3)}\`);
+                // First pass at center: back to front (full engagement)
+                gcode.push(\`G1 Y\${frontY.toFixed(3)} F\${fr.toFixed(1)}\`);
 
-                  // Right edge: front to back
+                for (let step = 0; step < stepsToEdge; step++) {
+                  // Move right (outward) - climb direction
+                  rightX += stepOver;
+                  if (rightX > startRightX) rightX = startRightX;
+                  currentX = rightX;
+                  gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
+
+                  // Cut front to back (50% engagement on right side)
                   gcode.push(\`G1 Y\${backY.toFixed(3)}\`);
 
-                  // Step both edges inward
-                  leftX += stepOver;
-                  rightX -= stepOver;
+                  // Move left (outward, across to other side)
+                  leftX -= stepOver;
+                  if (leftX < startLeftX) leftX = startLeftX;
+                  currentX = leftX;
+                  gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
 
-                  if (leftX >= rightX) break;
+                  // Cut back to front (50% engagement on left side)
+                  gcode.push(\`G1 Y\${frontY.toFixed(3)}\`);
 
-                  // Move to left edge (now inward)
-                  gcode.push(\`G1 X\${leftX.toFixed(3)}\`);
+                  // Check if we've reached the edges
+                  if (leftX <= startLeftX && rightX >= startRightX) break;
                 }
 
                 gcode.push('');
@@ -999,7 +1015,7 @@ export async function onLoad(ctx) {
         width: '800px'
       }
     );
-  });
+  }, { icon: 'logo.png' });
 }
 
 export async function onUnload(ctx) {
