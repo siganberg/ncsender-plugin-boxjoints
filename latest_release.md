@@ -1,7 +1,16 @@
 ## What's Changed
 
+### ✨ New Features
+- Added graphical representation of the wood for better visualization
+- Added "Both" option for piece type selection
+- Added plugin icon
+
 ### 🐛 Bug Fixes
-- Fixed rapid clearance calculation for multi-pass operations to prevent tool collisions
-- Corrected trim width offset calculation for more accurate edge trimming
-- Fixed left and right edge cutting directions to properly position the bit
-- Removed support for negative trim width values to prevent invalid configurations
+- Fixed gap calculation issue
+- Fixed layer handling
+
+### 🔧 Improvements
+- Optimized G-code generation
+- Implemented spiral path for climb cutting
+- Removed extra travel moves for more efficient toolpaths
+- Various UI improvements
