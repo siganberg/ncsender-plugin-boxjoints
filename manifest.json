@@ -1,7 +1,7 @@
 {
   "id": "com.ncsender.boxjoints",
   "name": "BoxJoints",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "0.3.19",
   "author": "ncSender",
   "description": "Box joints generator for CNC",
