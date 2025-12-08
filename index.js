@@ -609,8 +609,8 @@ export async function onLoad(ctx) {
             const svgWidth = availableWidth + (padding * 2);
 
             // Wood colors
-            const woodColorA = '#D4A574';
-            const woodColorB = '#C49A6C';
+            const woodColorA = '#E8C9A0';
+            const woodColorB = '#E8C9A0';
             const textColor = '#6B5538';
 
             // Dimension colors
@@ -618,6 +618,24 @@ export async function onLoad(ctx) {
             const slotWidthColor = '#3498DB';
             const fingerWidthColor = '#2ECC71';
             const boardThicknessColor = '#9B59B6';
+
+            // Wood grain pattern definitions
+            const woodGrainDefs = \`
+              <defs>
+                <pattern id="woodGrainA" patternUnits="userSpaceOnUse" width="200" height="12">
+                  <rect width="200" height="12" fill="\${woodColorA}"/>
+                  <path d="M0,2 Q50,0 100,3 T200,2" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.6"/>
+                  <path d="M0,6 Q40,4 80,7 T160,5 T200,6" stroke="#C9A882" stroke-width="0.8" fill="none" opacity="0.5"/>
+                  <path d="M0,10 Q60,8 120,11 T200,9" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.4"/>
+                </pattern>
+                <pattern id="woodGrainB" patternUnits="userSpaceOnUse" width="200" height="12">
+                  <rect width="200" height="12" fill="\${woodColorB}"/>
+                  <path d="M0,2 Q50,0 100,3 T200,2" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.6"/>
+                  <path d="M0,6 Q40,4 80,7 T160,5 T200,6" stroke="#C9A882" stroke-width="0.8" fill="none" opacity="0.5"/>
+                  <path d="M0,10 Q60,8 120,11 T200,9" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.4"/>
+                </pattern>
+              </defs>
+            \`;
 
             // Handle "Both" mode - draw two pieces stacked
             if (pieceType === 'Both') {
@@ -627,11 +645,12 @@ export async function onLoad(ctx) {
               const svgHeight = (boardHeight + fingerHeight) * 2 + gapBetweenPieces + 20;
 
               let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
+              svg += woodGrainDefs;
 
               // Draw Piece A (top)
               const pieceATopY = 10;
               const pieceABoardY = pieceATopY + fingerHeight;
-              svg += \`<rect x="\${padding}" y="\${pieceABoardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColorA}"/>\`;
+              svg += \`<rect x="\${padding}" y="\${pieceABoardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="url(#woodGrainA)"/>\`;
 
               let x = padding;
               const totalElements = (2 * fingerCount) - 1;
@@ -639,7 +658,7 @@ export async function onLoad(ctx) {
                 const isFinger = (i % 2 === 0); // Piece A starts with finger
                 const width = (isFinger ? fingerWidth : slotWidth) * scale;
                 if (isFinger) {
-                  svg += \`<rect x="\${x}" y="\${pieceATopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColorA}"/>\`;
+                  svg += \`<rect x="\${x}" y="\${pieceATopY}" width="\${width}" height="\${fingerHeight}" fill="url(#woodGrainA)"/>\`;
                 }
                 x += width;
               }
@@ -649,14 +668,14 @@ export async function onLoad(ctx) {
               // Draw Piece B (bottom)
               const pieceBTopY = pieceABoardY + boardHeight + gapBetweenPieces;
               const pieceBBoardY = pieceBTopY + fingerHeight;
-              svg += \`<rect x="\${padding}" y="\${pieceBBoardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColorB}"/>\`;
+              svg += \`<rect x="\${padding}" y="\${pieceBBoardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="url(#woodGrainB)"/>\`;
 
               x = padding;
               for (let i = 0; i < totalElements; i++) {
                 const isFinger = (i % 2 === 1); // Piece B starts with slot
                 const width = (isFinger ? fingerWidth : slotWidth) * scale;
                 if (isFinger) {
-                  svg += \`<rect x="\${x}" y="\${pieceBTopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColorB}"/>\`;
+                  svg += \`<rect x="\${x}" y="\${pieceBTopY}" width="\${width}" height="\${fingerHeight}" fill="url(#woodGrainB)"/>\`;
                 }
                 x += width;
               }
@@ -693,15 +712,16 @@ export async function onLoad(ctx) {
               const boardTopY = 10;
 
               let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
+              svg += woodGrainDefs;
 
-              const woodColor = woodColorA;
+              const woodPattern = pieceType === 'A' ? 'url(#woodGrainA)' : 'url(#woodGrainB)';
               const boardY = boardTopY + fingerHeight;
               const numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
               const numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
               const singleTotalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
               const singleScale = availableWidth / singleTotalWidth;
 
-              svg += \`<rect x="\${padding}" y="\${boardY}" width="\${singleTotalWidth * singleScale}" height="\${boardHeight}" fill="\${woodColor}"/>\`;
+              svg += \`<rect x="\${padding}" y="\${boardY}" width="\${singleTotalWidth * singleScale}" height="\${boardHeight}" fill="\${woodPattern}"/>\`;
 
               let x = padding;
               const totalElements = (2 * fingerCount) - 1;
@@ -709,13 +729,14 @@ export async function onLoad(ctx) {
                 const isFinger = pieceType === 'A' ? (i % 2 === 0) : (i % 2 === 1);
                 const width = (isFinger ? fingerWidth : slotWidth) * singleScale;
                 if (isFinger) {
-                  svg += \`<rect x="\${x}" y="\${boardTopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColor}"/>\`;
+                  svg += \`<rect x="\${x}" y="\${boardTopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodPattern}"/>\`;
                 }
                 x += width;
               }
 
               const labelY = boardY + (boardHeight / 2) + 5;
-              svg += \`<text x="\${svgWidth / 2}" y="\${labelY}" text-anchor="middle" fill="\${textColor}" font-size="16" font-weight="600" font-family="system-ui">Piece \${pieceType}</text>\`;
+              const pieceLabel = pieceType === 'A' ? 'Piece A (pins)' : 'Piece B (tails)';
+              svg += \`<text x="\${svgWidth / 2}" y="\${labelY}" text-anchor="middle" fill="\${textColor}" font-size="16" font-weight="600" font-family="system-ui">\${pieceLabel}</text>\`;
 
               const boardBottomY = boardY + boardHeight;
               svg += \`<line x1="\${padding}" y1="\${boardBottomY}" x2="\${padding + singleTotalWidth * singleScale}" y2="\${boardBottomY}" stroke="\${stockWidthColor}" stroke-width="5"/>\`;
@@ -747,11 +768,11 @@ export async function onLoad(ctx) {
                     <span style="color: \${stockWidthColor}; font-weight: 600;">\${boardWidthInput.toFixed(1)} \${unit}</span>
                   </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${slotWidthColor}15; border: 1px solid \${slotWidthColor}40; border-radius: 8px;">
-                  <div style="width: 16px; height: 16px; background: \${slotWidthColor}; border-radius: 4px; flex-shrink: 0;"></div>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${boardThicknessColor}15; border: 1px solid \${boardThicknessColor}40; border-radius: 8px;">
+                  <div style="width: 16px; height: 16px; background: \${boardThicknessColor}; border-radius: 4px; flex-shrink: 0;"></div>
                   <div style="display: flex; flex-direction: column; line-height: 1.2;">
-                    <span style="color: var(--color-text-secondary); font-size: 11px;">Slot Width</span>
-                    <span style="color: \${slotWidthColor}; font-weight: 600;">\${slotWidth.toFixed(1)} \${unit}</span>
+                    <span style="color: var(--color-text-secondary); font-size: 11px;">Board Thickness</span>
+                    <span style="color: \${boardThicknessColor}; font-weight: 600;">\${boardThickness.toFixed(1)} \${unit}</span>
                   </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${fingerWidthColor}15; border: 1px solid \${fingerWidthColor}40; border-radius: 8px;">
@@ -761,11 +782,11 @@ export async function onLoad(ctx) {
                     <span style="color: \${fingerWidthColor}; font-weight: 600;">\${fingerWidth.toFixed(1)} \${unit}</span>
                   </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${boardThicknessColor}15; border: 1px solid \${boardThicknessColor}40; border-radius: 8px;">
-                  <div style="width: 16px; height: 16px; background: \${boardThicknessColor}; border-radius: 4px; flex-shrink: 0;"></div>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${slotWidthColor}15; border: 1px solid \${slotWidthColor}40; border-radius: 8px;">
+                  <div style="width: 16px; height: 16px; background: \${slotWidthColor}; border-radius: 4px; flex-shrink: 0;"></div>
                   <div style="display: flex; flex-direction: column; line-height: 1.2;">
-                    <span style="color: var(--color-text-secondary); font-size: 11px;">Board Thickness</span>
-                    <span style="color: \${boardThicknessColor}; font-weight: 600;">\${boardThickness.toFixed(1)} \${unit}</span>
+                    <span style="color: var(--color-text-secondary); font-size: 11px;">Slot Width</span>
+                    <span style="color: \${slotWidthColor}; font-weight: 600;">\${slotWidth.toFixed(1)} \${unit}</span>
                   </div>
                 </div>
               </div>
@@ -1056,7 +1077,8 @@ export async function onLoad(ctx) {
             // Create FormData and upload G-code as file
             const formData = new FormData();
             const blob = new Blob([gcode], { type: 'text/plain' });
-            const filename = \`BoxJoint_\${displayValues.pieceType}_BT-\${displayValues.boardThickness}_BW-\${displayValues.boardWidth}_FC-\${displayValues.fingerCount}_DPP-\${displayValues.depthPerPass}.nc\`;
+            const pieceTypeLabel = displayValues.pieceType === 'Both' ? 'AB' : displayValues.pieceType;
+            const filename = \`BoxJoint_\${pieceTypeLabel}_BT-\${displayValues.boardThickness}_BW-\${displayValues.boardWidth}_FC-\${displayValues.fingerCount}_DPP-\${displayValues.depthPerPass}.nc\`;
             formData.append('file', blob, filename);
 
             try {
