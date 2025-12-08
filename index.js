@@ -361,6 +361,7 @@ export async function onLoad(ctx) {
                       <select id="pieceType">
                         <option value="A" ${settings.pieceType === 'A' ? 'selected' : ''}>A (pins)</option>
                         <option value="B" ${settings.pieceType === 'B' ? 'selected' : ''}>B (tails)</option>
+                        <option value="Both" ${settings.pieceType === 'Both' ? 'selected' : ''}>Both (pins & tails)</option>
                       </select>
                     </div>
                     <div class="form-group">
@@ -422,6 +423,7 @@ export async function onLoad(ctx) {
                 <div class="form-card-title">Calculated Dimensions</div>
                 <div id="legend-container" style="margin-bottom: 16px;"></div>
                 <div id="preview-container"></div>
+                <div id="instruction-container"></div>
               </div>
             </div>
           </form>
@@ -589,117 +591,209 @@ export async function onLoad(ctx) {
           function updatePreview(fingerWidth, slotWidth, fingerCount, pieceType) {
             const previewContainer = document.getElementById('preview-container');
             const legendContainer = document.getElementById('legend-container');
+            const instructionContainer = document.getElementById('instruction-container');
             if (!previewContainer || !legendContainer) return;
 
             // Get board thickness and width from form
             const boardThickness = parseFloat(document.getElementById('boardThickness').value) || 0;
             const boardWidthInput = parseFloat(document.getElementById('boardWidth').value) || 0;
 
-            const svgHeight = 380;
             const padding = 0;
             const availableWidth = previewContainer.offsetWidth - (padding * 2);
 
-            // Calculate total width and scale
-            // Piece A: fingerCount fingers, (fingerCount-1) slots
-            // Piece B: (fingerCount-1) fingers, fingerCount slots
-            const numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
-            const numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
-            const totalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
+            // Calculate total width for scaling (use Piece A dimensions)
+            const numFingersA = fingerCount;
+            const numSlotsA = fingerCount - 1;
+            const totalWidth = (fingerWidth * numFingersA) + (slotWidth * numSlotsA);
             const scale = availableWidth / totalWidth;
             const svgWidth = availableWidth + (padding * 2);
 
-            const boardHeight = 340;
-            const fingerHeight = 25;
-            const boardTopY = 15;
-
-            let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
-
-            // Wood color
-            const woodColor = '#D4A574';
+            // Wood colors
+            const woodColorA = '#D4A574';
+            const woodColorB = '#C49A6C';
             const textColor = '#6B5538';
 
-            // Board base
-            const boardY = boardTopY + fingerHeight;
-            svg += \`<rect x="\${padding}" y="\${boardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColor}"/>\`;
+            // Dimension colors
+            const stockWidthColor = '#E74C3C';
+            const slotWidthColor = '#3498DB';
+            const fingerWidthColor = '#2ECC71';
+            const boardThicknessColor = '#9B59B6';
 
-            // Draw fingers and slots
-            let x = padding;
+            // Handle "Both" mode - draw two pieces stacked
+            if (pieceType === 'Both') {
+              const boardHeight = 120;
+              const fingerHeight = 16;
+              const gapBetweenPieces = 20;
+              const svgHeight = (boardHeight + fingerHeight) * 2 + gapBetweenPieces + 20;
 
-            // Piece A: fingerCount fingers, (fingerCount-1) slots
-            // Piece B: (fingerCount-1) fingers, fingerCount slots
-            // Total elements = 2*fingerCount - 1
-            const totalElements = (2 * fingerCount) - 1;
+              let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
 
-            for (let i = 0; i < totalElements; i++) {
-              // Piece A: starts with finger (even indices are fingers)
-              // Piece B: starts with slot (even indices are slots)
-              const isFinger = pieceType === 'A' ? (i % 2 === 0) : (i % 2 === 1);
-              const width = (isFinger ? fingerWidth : slotWidth) * scale;
+              // Draw Piece A (top)
+              const pieceATopY = 10;
+              const pieceABoardY = pieceATopY + fingerHeight;
+              svg += \`<rect x="\${padding}" y="\${pieceABoardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColorA}"/>\`;
 
-              if (isFinger) {
-                // Draw finger
-                const fingerY = boardTopY;
-                svg += \`<rect x="\${x}" y="\${fingerY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColor}"/>\`;
+              let x = padding;
+              const totalElements = (2 * fingerCount) - 1;
+              for (let i = 0; i < totalElements; i++) {
+                const isFinger = (i % 2 === 0); // Piece A starts with finger
+                const width = (isFinger ? fingerWidth : slotWidth) * scale;
+                if (isFinger) {
+                  svg += \`<rect x="\${x}" y="\${pieceATopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColorA}"/>\`;
+                }
+                x += width;
               }
-              // Slots are just gaps (transparent), no need to draw anything
+              const pieceALabelY = pieceABoardY + (boardHeight / 2) + 5;
+              svg += \`<text x="\${svgWidth / 2}" y="\${pieceALabelY}" text-anchor="middle" fill="\${textColor}" font-size="14" font-weight="600" font-family="system-ui">Piece A (pins)</text>\`;
 
-              x += width;
+              // Draw Piece B (bottom)
+              const pieceBTopY = pieceABoardY + boardHeight + gapBetweenPieces;
+              const pieceBBoardY = pieceBTopY + fingerHeight;
+              svg += \`<rect x="\${padding}" y="\${pieceBBoardY}" width="\${totalWidth * scale}" height="\${boardHeight}" fill="\${woodColorB}"/>\`;
+
+              x = padding;
+              for (let i = 0; i < totalElements; i++) {
+                const isFinger = (i % 2 === 1); // Piece B starts with slot
+                const width = (isFinger ? fingerWidth : slotWidth) * scale;
+                if (isFinger) {
+                  svg += \`<rect x="\${x}" y="\${pieceBTopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColorB}"/>\`;
+                }
+                x += width;
+              }
+              const pieceBLabelY = pieceBBoardY + (boardHeight / 2) + 5;
+              svg += \`<text x="\${svgWidth / 2}" y="\${pieceBLabelY}" text-anchor="middle" fill="\${textColor}" font-size="14" font-weight="600" font-family="system-ui">Piece B (tails)</text>\`;
+
+              // Board width indicator on Piece A bottom
+              const pieceABottomY = pieceABoardY + boardHeight;
+              svg += \`<line x1="\${padding}" y1="\${pieceABottomY}" x2="\${padding + totalWidth * scale}" y2="\${pieceABottomY}" stroke="\${stockWidthColor}" stroke-width="4"/>\`;
+
+              // Board width indicator on Piece B bottom
+              const pieceBBottomY = pieceBBoardY + boardHeight;
+              svg += \`<line x1="\${padding}" y1="\${pieceBBottomY}" x2="\${padding + totalWidth * scale}" y2="\${pieceBBottomY}" stroke="\${stockWidthColor}" stroke-width="4"/>\`;
+
+              // Slot width indicator on Piece A (first slot)
+              const firstSlotStartA = padding + fingerWidth * scale;
+              const firstSlotEndA = firstSlotStartA + (slotWidth * scale);
+              svg += \`<line x1="\${firstSlotStartA}" y1="\${pieceABoardY}" x2="\${firstSlotEndA}" y2="\${pieceABoardY}" stroke="\${slotWidthColor}" stroke-width="3"/>\`;
+
+              // Board thickness indicator (vertical line on Piece A)
+              svg += \`<line x1="\${firstSlotEndA}" y1="\${pieceATopY}" x2="\${firstSlotEndA}" y2="\${pieceABoardY}" stroke="\${boardThicknessColor}" stroke-width="3"/>\`;
+
+              // Finger width indicator on Piece A (first finger)
+              const firstFingerEndA = padding + (fingerWidth * scale);
+              svg += \`<line x1="\${padding}" y1="\${pieceATopY}" x2="\${firstFingerEndA}" y2="\${pieceATopY}" stroke="\${fingerWidthColor}" stroke-width="3"/>\`;
+
+              svg += '</svg>';
+              previewContainer.innerHTML = svg;
+            } else {
+              // Single piece mode (A or B)
+              const svgHeight = 300;
+              const boardHeight = 260;
+              const fingerHeight = 20;
+              const boardTopY = 10;
+
+              let svg = \`<svg width="\${svgWidth}" height="\${svgHeight}" style="display: block; margin: 0 auto;">\`;
+
+              const woodColor = woodColorA;
+              const boardY = boardTopY + fingerHeight;
+              const numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
+              const numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
+              const singleTotalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
+              const singleScale = availableWidth / singleTotalWidth;
+
+              svg += \`<rect x="\${padding}" y="\${boardY}" width="\${singleTotalWidth * singleScale}" height="\${boardHeight}" fill="\${woodColor}"/>\`;
+
+              let x = padding;
+              const totalElements = (2 * fingerCount) - 1;
+              for (let i = 0; i < totalElements; i++) {
+                const isFinger = pieceType === 'A' ? (i % 2 === 0) : (i % 2 === 1);
+                const width = (isFinger ? fingerWidth : slotWidth) * singleScale;
+                if (isFinger) {
+                  svg += \`<rect x="\${x}" y="\${boardTopY}" width="\${width}" height="\${fingerHeight}" fill="\${woodColor}"/>\`;
+                }
+                x += width;
+              }
+
+              const labelY = boardY + (boardHeight / 2) + 5;
+              svg += \`<text x="\${svgWidth / 2}" y="\${labelY}" text-anchor="middle" fill="\${textColor}" font-size="16" font-weight="600" font-family="system-ui">Piece \${pieceType}</text>\`;
+
+              const boardBottomY = boardY + boardHeight;
+              svg += \`<line x1="\${padding}" y1="\${boardBottomY}" x2="\${padding + singleTotalWidth * singleScale}" y2="\${boardBottomY}" stroke="\${stockWidthColor}" stroke-width="5"/>\`;
+
+              const firstSlotStart = pieceType === 'A' ? (padding + fingerWidth * singleScale) : padding;
+              const firstSlotEnd = firstSlotStart + (slotWidth * singleScale);
+              const slotTopY = boardY;
+              svg += \`<line x1="\${firstSlotStart}" y1="\${slotTopY}" x2="\${firstSlotEnd}" y2="\${slotTopY}" stroke="\${slotWidthColor}" stroke-width="3"/>\`;
+
+              const fingerTopY = boardTopY;
+              svg += \`<line x1="\${firstSlotEnd}" y1="\${fingerTopY}" x2="\${firstSlotEnd}" y2="\${slotTopY}" stroke="\${boardThicknessColor}" stroke-width="3"/>\`;
+
+              const firstFingerStart = pieceType === 'A' ? padding : (padding + slotWidth * singleScale);
+              const firstFingerEnd = firstFingerStart + (fingerWidth * singleScale);
+              svg += \`<line x1="\${firstFingerStart}" y1="\${fingerTopY}" x2="\${firstFingerEnd}" y2="\${fingerTopY}" stroke="\${fingerWidthColor}" stroke-width="3"/>\`;
+
+              svg += '</svg>';
+              previewContainer.innerHTML = svg;
             }
-
-            // Label - centered on the wood board
-            const labelY = boardY + (boardHeight / 2) + 5;
-            svg += \`<text x="\${svgWidth / 2}" y="\${labelY}" text-anchor="middle" fill="\${textColor}" font-size="16" font-weight="600" font-family="system-ui">Piece \${pieceType}</text>\`;
-
-            // Add colored border indicator for board width
-            const boardBottomY = boardY + boardHeight;
-            const stockWidthColor = '#E74C3C'; // Red color for board width
-            svg += \`<line x1="\${padding}" y1="\${boardBottomY}" x2="\${padding + totalWidth * scale}" y2="\${boardBottomY}" stroke="\${stockWidthColor}" stroke-width="5"/>\`;
-
-            // Add colored border indicator for slot width (on first slot from left, at the top)
-            const slotWidthColor = '#3498DB'; // Blue color for slot width
-            const firstSlotStart = pieceType === 'A' ? (padding + fingerWidth * scale) : padding;
-            const firstSlotEnd = firstSlotStart + (slotWidth * scale);
-            const slotTopY = boardY;
-            svg += \`<line x1="\${firstSlotStart}" y1="\${slotTopY}" x2="\${firstSlotEnd}" y2="\${slotTopY}" stroke="\${slotWidthColor}" stroke-width="3"/>\`;
-
-            // Add colored border indicator for board thickness (on right side of first slot, vertical)
-            const boardThicknessColor = '#9B59B6'; // Purple color for board thickness
-            const fingerTopY = boardTopY;
-            svg += \`<line x1="\${firstSlotEnd}" y1="\${fingerTopY}" x2="\${firstSlotEnd}" y2="\${slotTopY}" stroke="\${boardThicknessColor}" stroke-width="3"/>\`;
-
-            // Add colored border indicator for finger width (on top of first finger)
-            const fingerWidthColor = '#2ECC71'; // Green color for finger width
-            const firstFingerStart = pieceType === 'A' ? padding : (padding + slotWidth * scale);
-            const firstFingerEnd = firstFingerStart + (fingerWidth * scale);
-            svg += \`<line x1="\${firstFingerStart}" y1="\${fingerTopY}" x2="\${firstFingerEnd}" y2="\${fingerTopY}" stroke="\${fingerWidthColor}" stroke-width="3"/>\`;
-
-            svg += '</svg>';
 
             // Add legend at the top
             const unit = 'mm';
             const legendHTML = \`
-              <div style="font-size: 14px; font-family: system-ui; display: flex; flex-direction: column; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <div style="width: 30px; height: 4px; background: \${stockWidthColor};"></div>
-                  <span style="color: \${stockWidthColor}; font-weight: 500;">Board Width: \${boardWidthInput.toFixed(1)} \${unit}</span>
+              <div style="font-size: 13px; font-family: system-ui; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${stockWidthColor}15; border: 1px solid \${stockWidthColor}40; border-radius: 8px;">
+                  <div style="width: 16px; height: 16px; background: \${stockWidthColor}; border-radius: 4px; flex-shrink: 0;"></div>
+                  <div style="display: flex; flex-direction: column; line-height: 1.2;">
+                    <span style="color: var(--color-text-secondary); font-size: 11px;">Board Width</span>
+                    <span style="color: \${stockWidthColor}; font-weight: 600;">\${boardWidthInput.toFixed(1)} \${unit}</span>
+                  </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <div style="width: 30px; height: 4px; background: \${slotWidthColor};"></div>
-                  <span style="color: \${slotWidthColor}; font-weight: 500;">Slot Width: \${slotWidth.toFixed(1)} \${unit}</span>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${slotWidthColor}15; border: 1px solid \${slotWidthColor}40; border-radius: 8px;">
+                  <div style="width: 16px; height: 16px; background: \${slotWidthColor}; border-radius: 4px; flex-shrink: 0;"></div>
+                  <div style="display: flex; flex-direction: column; line-height: 1.2;">
+                    <span style="color: var(--color-text-secondary); font-size: 11px;">Slot Width</span>
+                    <span style="color: \${slotWidthColor}; font-weight: 600;">\${slotWidth.toFixed(1)} \${unit}</span>
+                  </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <div style="width: 30px; height: 4px; background: \${fingerWidthColor};"></div>
-                  <span style="color: \${fingerWidthColor}; font-weight: 500;">Finger Width: \${fingerWidth.toFixed(1)} \${unit}</span>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${fingerWidthColor}15; border: 1px solid \${fingerWidthColor}40; border-radius: 8px;">
+                  <div style="width: 16px; height: 16px; background: \${fingerWidthColor}; border-radius: 4px; flex-shrink: 0;"></div>
+                  <div style="display: flex; flex-direction: column; line-height: 1.2;">
+                    <span style="color: var(--color-text-secondary); font-size: 11px;">Finger Width</span>
+                    <span style="color: \${fingerWidthColor}; font-weight: 600;">\${fingerWidth.toFixed(1)} \${unit}</span>
+                  </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <div style="width: 30px; height: 4px; background: \${boardThicknessColor};"></div>
-                  <span style="color: \${boardThicknessColor}; font-weight: 500;">Board Thickness: \${boardThickness.toFixed(1)} \${unit}</span>
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: \${boardThicknessColor}15; border: 1px solid \${boardThicknessColor}40; border-radius: 8px;">
+                  <div style="width: 16px; height: 16px; background: \${boardThicknessColor}; border-radius: 4px; flex-shrink: 0;"></div>
+                  <div style="display: flex; flex-direction: column; line-height: 1.2;">
+                    <span style="color: var(--color-text-secondary); font-size: 11px;">Board Thickness</span>
+                    <span style="color: \${boardThicknessColor}; font-weight: 600;">\${boardThickness.toFixed(1)} \${unit}</span>
+                  </div>
                 </div>
               </div>
             \`;
 
             legendContainer.innerHTML = legendHTML;
-            previewContainer.innerHTML = svg;
+
+            // Show instruction based on piece type
+            if (instructionContainer) {
+              let instructionText = '';
+              if (pieceType === 'Both') {
+                instructionText = 'Place both boards side by side with Piece A on the left and Piece B on the right. Set X0 Y0 at the front-left corner of Piece A.';
+              } else if (pieceType === 'A') {
+                instructionText = 'Place the board for Piece A (pins). Set X0 Y0 at the front-left corner of the board.';
+              } else if (pieceType === 'B') {
+                instructionText = 'Place the board for Piece B (tails). Set X0 Y0 at the front-left corner of the board.';
+              }
+
+              if (instructionText) {
+                instructionContainer.innerHTML = \`
+                  <div style="margin-top: 16px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; font-size: 13px; color: #856404;">
+                    <strong>Setup:</strong> \${instructionText}
+                  </div>
+                \`;
+              } else {
+                instructionContainer.innerHTML = '';
+              }
+            }
           }
 
           // Add validation on blur for each input
@@ -764,18 +858,15 @@ export async function onLoad(ctx) {
             const dpp = convertToMetric(depthPerPass);
             const fr = convertToMetric(feedRate);
 
-            // Calculate finger width from board width and finger count
-            // Piece A: fingerCount fingers + (fingerCount-1) slots = fingerCount*fw + (fingerCount-1)*(fw+ft) = bw
-            // Piece B: fingerCount slots + (fingerCount-1) fingers = fingerCount*(fw+ft) + (fingerCount-1)*fw = bw
-            // Both simplify to: (2*fingerCount - 1) * fw + numSlots * ft = bw
-            // Determine number of slots based on piece type
-            const numSlotsForCalc = pieceType === 'A' ? fingerCount - 1 : fingerCount;
-            const fw = (bw - (numSlotsForCalc * ft)) / ((fingerCount * 2) - 1);
+            // Calculate finger width (same for both pieces)
+            // Using Piece A formula: (fingerCount - 1) slots
+            const fw = (bw - ((fingerCount - 1) * ft)) / ((fingerCount * 2) - 1);
 
             const gcode = [];
 
             // Header
-            gcode.push('(Box Joints - Piece ' + pieceType + ')');
+            const pieceLabel = pieceType === 'Both' ? 'Both (A & B)' : pieceType;
+            gcode.push('(Box Joints - Piece ' + pieceLabel + ')');
             gcode.push(\`(Board Thickness: \${boardThickness}\${isImperial ? 'in' : 'mm'})\`);
             gcode.push(\`(Board Width: \${boardWidth}\${isImperial ? 'in' : 'mm'})\`);
             gcode.push(\`(Finger Count: \${fingerCount})\`);
@@ -802,12 +893,6 @@ export async function onLoad(ctx) {
             // Slot width should equal finger width + tolerance
             const slotWidth = fw + ft;
 
-            // Determine starting offset and number of slots based on piece type
-            // Piece A: starts with finger, ends with finger → (fingerCount - 1) slots
-            // Piece B: starts with slot, ends with slot → fingerCount slots
-            const startOffset = pieceType === 'A' ? fw : 0;
-            const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
-
             // Calculate number of passes needed
             const numPasses = Math.ceil(bt / dpp);
 
@@ -818,101 +903,85 @@ export async function onLoad(ctx) {
             const bitRadius = bd / 2;
             const stepOver = bd * 0.4; // 40% stepover for better coverage
             const extraTravelY = 5 + bitRadius; // Extra travel beyond material face on Y axis
-            const extraTravelX = bitRadius; // Extra travel on X axis to ensure clean edges
-            const exitSlowdownZone = 3; // Slow down 3mm before exit to prevent tearout
 
-            // Calculate how many X passes needed to clear slot width
-            let numXPasses;
-            if (slotWidth <= bd) {
-              numXPasses = 1;
-            } else {
-              const remainingWidth = slotWidth - bd;
-              numXPasses = 1 + Math.ceil(remainingWidth / stepOver);
-            }
-
-            // Process each slot completely (all depth layers)
-            for (let i = 0; i < numSlots; i++) {
-              // Each finger+slot pair takes up (fw + slotWidth) = (fw + fw + ft) = 2*fw + ft
-              const slotStart = startOffset + (i * (fw + slotWidth));
-              const slotEnd = slotStart + slotWidth;
-
-              // Skip if slot goes significantly beyond board width (allow small rounding errors)
-              if (slotEnd > bw + 0.2) break;
-
-              gcode.push(\`; === Slot \${i + 1} ===\`);
+            // Helper function to generate slots for a piece
+            function generateSlotsForPiece(pieceName, xOffset, numSlots, startOffset) {
+              gcode.push(\`; ========== \${pieceName} ==========\`);
               gcode.push('');
 
-              // Box spiral parameters
-              const frontY = -extraTravelY;
-              const backY = bt + extraTravelY;
-              const startLeftX = slotStart + bitRadius;
-              const startRightX = slotEnd - bitRadius;
+              for (let i = 0; i < numSlots; i++) {
+                const slotStart = xOffset + startOffset + (i * (fw + slotWidth));
+                const slotEnd = slotStart + slotWidth;
 
-              // For each depth pass (layer by layer)
-              for (let pass = 0; pass < numPasses; pass++) {
-                const depth = -Math.min((pass + 1) * dpp, bt);
+                gcode.push(\`; === \${pieceName} - Slot \${i + 1} ===\`);
+                gcode.push('');
 
-                gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
+                const frontY = -extraTravelY;
+                const backY = bt + extraTravelY;
+                const startLeftX = slotStart + bitRadius;
+                const startRightX = slotEnd - bitRadius;
 
-                // Start from center and spiral outward
-                const centerX = (startLeftX + startRightX) / 2;
-                const totalSpan = startRightX - startLeftX;
+                for (let pass = 0; pass < numPasses; pass++) {
+                  const depth = -Math.min((pass + 1) * dpp, bt);
 
-                // Calculate how many steps we need from center to edges
-                const stepsToEdge = Math.ceil(totalSpan / (2 * stepOver));
+                  gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
 
-                // Start at center
-                let leftX = centerX;
-                let rightX = centerX;
+                  const centerX = (startLeftX + startRightX) / 2;
+                  const totalSpan = startRightX - startLeftX;
+                  const stepsToEdge = Math.ceil(totalSpan / (2 * stepOver));
 
-                // Position to start of layer (center)
-                if (pass === 0) {
-                  // First layer: rapid position and plunge
+                  let leftX = centerX;
+                  let rightX = centerX;
+
                   gcode.push(\`G0 X\${centerX.toFixed(3)} Y\${backY.toFixed(3)}\`);
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
-                } else {
-                  // Subsequent layers: move back to center, then plunge deeper
-                  gcode.push(\`G0 X\${centerX.toFixed(3)} Y\${backY.toFixed(3)}\`);
-                  gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+
+                  let currentX = centerX;
+                  gcode.push(\`G1 Y\${frontY.toFixed(3)} F\${fr.toFixed(1)}\`);
+
+                  for (let step = 0; step < stepsToEdge; step++) {
+                    rightX += stepOver;
+                    if (rightX > startRightX) rightX = startRightX;
+                    currentX = rightX;
+                    gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
+
+                    gcode.push(\`G1 Y\${backY.toFixed(3)}\`);
+
+                    leftX -= stepOver;
+                    if (leftX < startLeftX) leftX = startLeftX;
+                    currentX = leftX;
+                    gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
+
+                    gcode.push(\`G1 Y\${frontY.toFixed(3)}\`);
+
+                    if (leftX <= startLeftX && rightX >= startRightX) break;
+                  }
+
+                  gcode.push('');
                 }
 
-                // Spiral outward from center (climb milling)
-                // Pattern: back-front (center), right, front-back, left, back-front, repeat
-                let currentX = centerX;
-
-                // First pass at center: back to front (full engagement)
-                gcode.push(\`G1 Y\${frontY.toFixed(3)} F\${fr.toFixed(1)}\`);
-
-                for (let step = 0; step < stepsToEdge; step++) {
-                  // Move right (outward) - climb direction
-                  rightX += stepOver;
-                  if (rightX > startRightX) rightX = startRightX;
-                  currentX = rightX;
-                  gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
-
-                  // Cut front to back (50% engagement on right side)
-                  gcode.push(\`G1 Y\${backY.toFixed(3)}\`);
-
-                  // Move left (outward, across to other side)
-                  leftX -= stepOver;
-                  if (leftX < startLeftX) leftX = startLeftX;
-                  currentX = leftX;
-                  gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
-
-                  // Cut back to front (50% engagement on left side)
-                  gcode.push(\`G1 Y\${frontY.toFixed(3)}\`);
-
-                  // Check if we've reached the edges
-                  if (leftX <= startLeftX && rightX >= startRightX) break;
-                }
-
+                gcode.push('G0 Z5.0');
                 gcode.push('');
               }
+            }
 
-              // Z-hop after all layers complete before moving to next slot
-              gcode.push('G0 Z5.0');
+            // Generate slots based on piece type
+            if (pieceType === 'Both') {
+              // Piece A: starts with finger, (fingerCount - 1) slots
+              const numSlotsA = fingerCount - 1;
+              const startOffsetA = fw; // First slot starts after first finger
+              generateSlotsForPiece('Piece A', 0, numSlotsA, startOffsetA);
 
-              gcode.push('');
+              // Piece B: starts with slot, fingerCount slots
+              // Piece B is positioned right after Piece A (at X = bw)
+              const numSlotsB = fingerCount;
+              const startOffsetB = 0; // First slot starts at the edge
+              generateSlotsForPiece('Piece B', bw, numSlotsB, startOffsetB);
+            } else {
+              // Single piece mode
+              const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
+              const startOffset = pieceType === 'A' ? fw : 0;
+              generateSlotsForPiece('Piece ' + pieceType, 0, numSlots, startOffset);
             }
 
             // Footer
