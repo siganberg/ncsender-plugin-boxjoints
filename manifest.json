@@ -8,7 +8,7 @@
   "entry": "index.js",
   "icon": "logo.png",
   "category": "gcode-generator",
-  "repository": "",
+  "repository": "https://github.com/siganberg/ncsender-plugin-boxjoints",
   "events": [],
   "permissions": ["gcode.modify"]
 }
