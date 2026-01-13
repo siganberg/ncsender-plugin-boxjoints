@@ -927,14 +927,14 @@ export async function onLoad(ctx) {
 
             // Helper function to generate slots for a piece
             function generateSlotsForPiece(pieceName, xOffset, numSlots, startOffset) {
-              gcode.push(\`; ========== \${pieceName} ==========\`);
+              gcode.push(\`(========== \${pieceName} ==========)\`);
               gcode.push('');
 
               for (let i = 0; i < numSlots; i++) {
                 const slotStart = xOffset + startOffset + (i * (fw + slotWidth));
                 const slotEnd = slotStart + slotWidth;
 
-                gcode.push(\`; === \${pieceName} - Slot \${i + 1} ===\`);
+                gcode.push(\`(=== \${pieceName} - Slot \${i + 1} ===)\`);
                 gcode.push('');
 
                 const frontY = -extraTravelY;
@@ -945,7 +945,7 @@ export async function onLoad(ctx) {
                 for (let pass = 0; pass < numPasses; pass++) {
                   const depth = -Math.min((pass + 1) * dpp, bt);
 
-                  gcode.push(\`; Layer \${pass + 1} at depth \${depth.toFixed(3)}mm\`);
+                  gcode.push(\`(Layer \${pass + 1} at depth \${depth.toFixed(3)}mm)\`);
 
                   const centerX = (startLeftX + startRightX) / 2;
                   const totalSpan = startRightX - startLeftX;
