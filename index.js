@@ -33,6 +33,7 @@ export async function onLoad(ctx) {
       bitDiameter: convertToDisplay(savedSettings.bitDiameter ?? 6.35),
       fitTolerance: convertToDisplay(savedSettings.fitTolerance ?? 0.1),
       pieceType: savedSettings.pieceType ?? 'A',
+      orientation: savedSettings.orientation ?? 'X',
       depthPerPass: convertToDisplay(savedSettings.depthPerPass ?? 3),
       feedRate: convertToDisplay(savedSettings.feedRate ?? 1000),
       spindleRpm: savedSettings.spindleRpm ?? 18000,
@@ -365,6 +366,15 @@ export async function onLoad(ctx) {
                       </select>
                     </div>
                     <div class="form-group">
+                      <label for="orientation">Orientation</label>
+                      <select id="orientation">
+                        <option value="X" ${settings.orientation === 'X' ? 'selected' : ''}>X (horizontal)</option>
+                        <option value="Y" ${settings.orientation === 'Y' ? 'selected' : ''}>Y (vertical)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row single">
+                    <div class="form-group">
                       <label for="depthPerPass">Depth Per Pass (${distanceUnit})</label>
                       <input type="number" id="depthPerPass" step="0.1" value="${settings.depthPerPass}" required>
                       <div class="validation-tooltip" id="depthPerPass-error"></div>
@@ -560,6 +570,7 @@ export async function onLoad(ctx) {
             const fingerCount = parseInt(document.getElementById('fingerCount').value);
             const fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
             const pieceType = document.getElementById('pieceType').value;
+            const orientation = document.getElementById('orientation').value;
 
             if (!isNaN(boardWidth) && !isNaN(fingerCount) && fingerCount > 0) {
               const convertToMetric = (value) => isImperial ? value * INCH_TO_MM : value;
@@ -577,7 +588,7 @@ export async function onLoad(ctx) {
               const slotWidth = fingerWidth + fitToleranceMetric;
 
               // Update preview
-              updatePreview(fingerWidth, slotWidth, fingerCount, pieceType);
+              updatePreview(fingerWidth, slotWidth, fingerCount, pieceType, orientation);
             } else {
               document.getElementById('preview-container').innerHTML = '';
               document.getElementById('legend-container').innerHTML = '';
@@ -588,7 +599,7 @@ export async function onLoad(ctx) {
           }
 
           // Generate SVG preview of box joints
-          function updatePreview(fingerWidth, slotWidth, fingerCount, pieceType) {
+          function updatePreview(fingerWidth, slotWidth, fingerCount, pieceType, orientation) {
             const previewContainer = document.getElementById('preview-container');
             const legendContainer = document.getElementById('legend-container');
             const instructionContainer = document.getElementById('instruction-container');
@@ -794,15 +805,20 @@ export async function onLoad(ctx) {
 
             legendContainer.innerHTML = legendHTML;
 
-            // Show instruction based on piece type
+            // Show instruction based on piece type and orientation
             if (instructionContainer) {
               let instructionText = '';
+              const orientationDesc = orientation === 'X' ? 'horizontal (along X-axis)' : 'vertical (along Y-axis)';
               if (pieceType === 'Both') {
-                instructionText = 'Place both boards side by side with Piece A on the left and Piece B on the right. Set X0 Y0 at the front-left corner of Piece A.';
+                if (orientation === 'X') {
+                  instructionText = 'Place both boards side by side with Piece A on the left and Piece B on the right. Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of Piece A.';
+                } else {
+                  instructionText = 'Place both boards one above the other with Piece A at the front and Piece B behind it. Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of Piece A.';
+                }
               } else if (pieceType === 'A') {
-                instructionText = 'Place the board for Piece A (pins). Set X0 Y0 at the front-left corner of the board.';
+                instructionText = 'Place the board for Piece A (pins). Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of the board.';
               } else if (pieceType === 'B') {
-                instructionText = 'Place the board for Piece B (tails). Set X0 Y0 at the front-left corner of the board.';
+                instructionText = 'Place the board for Piece B (tails). Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of the board.';
               }
 
               if (instructionText) {
@@ -844,10 +860,10 @@ export async function onLoad(ctx) {
           });
 
           // Add listeners for real-time calculation updates
-          ['boardWidth', 'boardThickness', 'fingerCount', 'fitTolerance', 'bitDiameter', 'pieceType'].forEach(fieldId => {
+          ['boardWidth', 'boardThickness', 'fingerCount', 'fitTolerance', 'bitDiameter', 'pieceType', 'orientation'].forEach(fieldId => {
             const input = document.getElementById(fieldId);
             if (input) {
-              input.addEventListener(fieldId === 'pieceType' ? 'change' : 'input', updateCalculatedDimensions);
+              input.addEventListener(['pieceType', 'orientation'].includes(fieldId) ? 'change' : 'input', updateCalculatedDimensions);
             }
           });
 
@@ -862,6 +878,7 @@ export async function onLoad(ctx) {
               bitDiameter,
               fitTolerance,
               pieceType,
+              orientation,
               depthPerPass,
               feedRate,
               spindleRpm,
@@ -888,6 +905,7 @@ export async function onLoad(ctx) {
             // Header
             const pieceLabel = pieceType === 'Both' ? 'Both (A & B)' : pieceType;
             gcode.push('(Box Joints - Piece ' + pieceLabel + ')');
+            gcode.push(\`(Orientation: \${orientation}-axis)\`);
             gcode.push(\`(Board Thickness: \${boardThickness}\${isImperial ? 'in' : 'mm'})\`);
             gcode.push(\`(Board Width: \${boardWidth}\${isImperial ? 'in' : 'mm'})\`);
             gcode.push(\`(Finger Count: \${fingerCount})\`);
@@ -926,56 +944,88 @@ export async function onLoad(ctx) {
             const extraTravelY = 5 + bitRadius; // Extra travel beyond material face on Y axis
 
             // Helper function to generate slots for a piece
-            function generateSlotsForPiece(pieceName, xOffset, numSlots, startOffset) {
+            // For X orientation: slots positioned along X, tool moves along Y
+            // For Y orientation: slots positioned along Y, tool moves along X
+            function generateSlotsForPiece(pieceName, primaryOffset, numSlots, startOffset) {
               gcode.push(\`(========== \${pieceName} ==========)\`);
               gcode.push('');
 
               for (let i = 0; i < numSlots; i++) {
-                const slotStart = xOffset + startOffset + (i * (fw + slotWidth));
+                const slotStart = primaryOffset + startOffset + (i * (fw + slotWidth));
                 const slotEnd = slotStart + slotWidth;
 
                 gcode.push(\`(=== \${pieceName} - Slot \${i + 1} ===)\`);
                 gcode.push('');
 
-                const frontY = -extraTravelY;
-                const backY = bt + extraTravelY;
-                const startLeftX = slotStart + bitRadius;
-                const startRightX = slotEnd - bitRadius;
+                // Secondary axis travel (perpendicular to slot direction)
+                const secondaryStart = -extraTravelY;
+                const secondaryEnd = bt + extraTravelY;
+
+                // Primary axis boundaries (along slot direction)
+                const primaryMin = slotStart + bitRadius;
+                const primaryMax = slotEnd - bitRadius;
 
                 for (let pass = 0; pass < numPasses; pass++) {
                   const depth = -Math.min((pass + 1) * dpp, bt);
 
                   gcode.push(\`(Layer \${pass + 1} at depth \${depth.toFixed(3)}mm)\`);
 
-                  const centerX = (startLeftX + startRightX) / 2;
-                  const totalSpan = startRightX - startLeftX;
+                  const centerPrimary = (primaryMin + primaryMax) / 2;
+                  const totalSpan = primaryMax - primaryMin;
                   const stepsToEdge = Math.ceil(totalSpan / (2 * stepOver));
 
-                  let leftX = centerX;
-                  let rightX = centerX;
+                  let leftPrimary = centerPrimary;
+                  let rightPrimary = centerPrimary;
 
-                  gcode.push(\`G0 X\${centerX.toFixed(3)} Y\${backY.toFixed(3)}\`);
+                  // Position at center of slot, at the back/right edge
+                  if (orientation === 'X') {
+                    gcode.push(\`G0 X\${centerPrimary.toFixed(3)} Y\${secondaryEnd.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G0 X\${secondaryEnd.toFixed(3)} Y\${centerPrimary.toFixed(3)}\`);
+                  }
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
 
-                  let currentX = centerX;
-                  gcode.push(\`G1 Y\${frontY.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  // Move to front/left edge
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${secondaryStart.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${secondaryStart.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  }
 
                   for (let step = 0; step < stepsToEdge; step++) {
-                    rightX += stepOver;
-                    if (rightX > startRightX) rightX = startRightX;
-                    currentX = rightX;
-                    gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
+                    // Step to the right/positive on primary axis
+                    rightPrimary += stepOver;
+                    if (rightPrimary > primaryMax) rightPrimary = primaryMax;
+                    if (orientation === 'X') {
+                      gcode.push(\`G1 X\${rightPrimary.toFixed(3)}\`);
+                    } else {
+                      gcode.push(\`G1 Y\${rightPrimary.toFixed(3)}\`);
+                    }
 
-                    gcode.push(\`G1 Y\${backY.toFixed(3)}\`);
+                    // Move to back/right edge on secondary axis
+                    if (orientation === 'X') {
+                      gcode.push(\`G1 Y\${secondaryEnd.toFixed(3)}\`);
+                    } else {
+                      gcode.push(\`G1 X\${secondaryEnd.toFixed(3)}\`);
+                    }
 
-                    leftX -= stepOver;
-                    if (leftX < startLeftX) leftX = startLeftX;
-                    currentX = leftX;
-                    gcode.push(\`G1 X\${currentX.toFixed(3)}\`);
+                    // Step to the left/negative on primary axis
+                    leftPrimary -= stepOver;
+                    if (leftPrimary < primaryMin) leftPrimary = primaryMin;
+                    if (orientation === 'X') {
+                      gcode.push(\`G1 X\${leftPrimary.toFixed(3)}\`);
+                    } else {
+                      gcode.push(\`G1 Y\${leftPrimary.toFixed(3)}\`);
+                    }
 
-                    gcode.push(\`G1 Y\${frontY.toFixed(3)}\`);
+                    // Move to front/left edge on secondary axis
+                    if (orientation === 'X') {
+                      gcode.push(\`G1 Y\${secondaryStart.toFixed(3)}\`);
+                    } else {
+                      gcode.push(\`G1 X\${secondaryStart.toFixed(3)}\`);
+                    }
 
-                    if (leftX <= startLeftX && rightX >= startRightX) break;
+                    if (leftPrimary <= primaryMin && rightPrimary >= primaryMax) break;
                   }
 
                   gcode.push('');
@@ -994,7 +1044,8 @@ export async function onLoad(ctx) {
               generateSlotsForPiece('Piece A', 0, numSlotsA, startOffsetA);
 
               // Piece B: starts with slot, fingerCount slots
-              // Piece B is positioned right after Piece A (at X = bw)
+              // Piece B is positioned after Piece A along the primary axis
+              // (X=bw for X orientation, Y=bw for Y orientation)
               const numSlotsB = fingerCount;
               const startOffsetB = 0; // First slot starts at the edge
               generateSlotsForPiece('Piece B', bw, numSlotsB, startOffsetB);
@@ -1030,6 +1081,7 @@ export async function onLoad(ctx) {
               bitDiameter: parseFloat(document.getElementById('bitDiameter').value),
               fitTolerance: parseFloat(document.getElementById('fitTolerance').value),
               pieceType: document.getElementById('pieceType').value,
+              orientation: document.getElementById('orientation').value,
               depthPerPass: parseFloat(document.getElementById('depthPerPass').value),
               feedRate: parseFloat(document.getElementById('feedRate').value),
               spindleRpm: parseFloat(document.getElementById('spindleRpm').value),
@@ -1053,6 +1105,7 @@ export async function onLoad(ctx) {
                 bitDiameter: convertToMetric(displayValues.bitDiameter),
                 fitTolerance: convertToMetric(displayValues.fitTolerance),
                 pieceType: displayValues.pieceType,
+                orientation: displayValues.orientation,
                 depthPerPass: convertToMetric(displayValues.depthPerPass),
                 feedRate: convertToMetric(displayValues.feedRate),
                 spindleRpm: displayValues.spindleRpm,
@@ -1078,7 +1131,7 @@ export async function onLoad(ctx) {
             const formData = new FormData();
             const blob = new Blob([gcode], { type: 'text/plain' });
             const pieceTypeLabel = displayValues.pieceType === 'Both' ? 'AB' : displayValues.pieceType;
-            const filename = \`BoxJoint_\${pieceTypeLabel}_BT-\${displayValues.boardThickness}_BW-\${displayValues.boardWidth}_FC-\${displayValues.fingerCount}_DPP-\${displayValues.depthPerPass}.nc\`;
+            const filename = \`BoxJoint_\${pieceTypeLabel}_\${displayValues.orientation}_BT-\${displayValues.boardThickness}_BW-\${displayValues.boardWidth}_FC-\${displayValues.fingerCount}_DPP-\${displayValues.depthPerPass}.nc\`;
             formData.append('file', blob, filename);
 
             try {
