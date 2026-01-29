@@ -1,7 +1,5 @@
 ## What's Changed
 
 ### ✨ New Features
-- Added support for in-app plugin updates
-
-### 🔧 Improvements
-- Updated license to dual GPL v3 + Commercial licensing model
+- Added support for Y orientation in box joint generation
+- Added vertical generation mode for more flexible joint placement
