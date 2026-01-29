@@ -938,16 +938,175 @@ export async function onLoad(ctx) {
             gcode.push('G53 G0 Z0 ; Move to machine Z0 (safe height)');
             gcode.push('');
 
-            // Calculate bit and stepover parameters
+            // Cutting parameters
             const bitRadius = bd / 2;
-            const stepOver = bd * 0.4; // 40% stepover for better coverage
-            const extraTravelY = 5 + bitRadius; // Extra travel beyond material face on Y axis
+            const scoringDepth = 5; // How far to cut into each corner (mm)
 
-            // Helper function to generate slots for a piece
-            // For X orientation: slots positioned along X, tool moves along Y
-            // For Y orientation: slots positioned along Y, tool moves along X
-            function generateSlotsForPiece(pieceName, primaryOffset, numSlots, startOffset) {
-              gcode.push(\`(========== \${pieceName} ==========)\`);
+            // Scoring pass: cut into each corner, reverse out - prevents tear-out
+            function generateScoringPass(pieceName, primaryOffset, numSlots, startOffset) {
+              gcode.push(\`(========== \${pieceName} - SCORING PASS ==========)\`);
+              gcode.push('(Cutting into corners to prevent tear-out)');
+              gcode.push('');
+
+              // Build list of all slot corners
+              const slots = [];
+              for (let i = 0; i < numSlots; i++) {
+                const slotStart = primaryOffset + startOffset + (i * (fw + slotWidth));
+                const slotEnd = slotStart + slotWidth;
+                // Primary axis positions (compensated for bit radius)
+                const leftPrimary = slotStart + bitRadius;
+                const rightPrimary = slotEnd - bitRadius;
+                slots.push({ index: i + 1, leftPrimary, rightPrimary });
+              }
+
+              const frontEntry = -bitRadius - 2; // Start outside material
+              const frontTarget = scoringDepth; // Cut 5mm into material
+              const backEntry = bt + bitRadius + 2; // Start outside material
+              const backTarget = bt - scoringDepth; // Cut 5mm into material
+
+              // FRONT SIDE - ALL DEPTH PASSES FIRST
+              gcode.push('(Front side corners - all depths)');
+              if (orientation === 'X') {
+                gcode.push(\`G0 X\${slots[0].leftPrimary.toFixed(3)} Y\${frontEntry.toFixed(3)}\`);
+              } else {
+                gcode.push(\`G0 X\${frontEntry.toFixed(3)} Y\${slots[0].leftPrimary.toFixed(3)}\`);
+              }
+
+              for (let pass = 0; pass < numPasses; pass++) {
+                const depth = -Math.min((pass + 1) * dpp, bt);
+                gcode.push(\`(--- Layer \${pass + 1} at depth \${depth.toFixed(3)}mm ---)\`);
+                gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+
+                for (let si = 0; si < slots.length; si++) {
+                  const slot = slots[si];
+
+                  // Front-left corner - move to position (already at depth)
+                  if (si > 0) {
+                    if (orientation === 'X') {
+                      gcode.push(\`G0 X\${slot.leftPrimary.toFixed(3)}\`);
+                    } else {
+                      gcode.push(\`G0 Y\${slot.leftPrimary.toFixed(3)}\`);
+                    }
+                  }
+                  // Cut inward
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${frontTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${frontTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  }
+                  // Reverse back out
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${frontEntry.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${frontEntry.toFixed(3)}\`);
+                  }
+
+                  // Front-right corner - move to position
+                  if (orientation === 'X') {
+                    gcode.push(\`G0 X\${slot.rightPrimary.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G0 Y\${slot.rightPrimary.toFixed(3)}\`);
+                  }
+                  // Cut inward
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${frontTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${frontTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  }
+                  // Reverse back out
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${frontEntry.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${frontEntry.toFixed(3)}\`);
+                  }
+                }
+
+                // Return to first slot for next depth pass
+                if (pass < numPasses - 1) {
+                  if (orientation === 'X') {
+                    gcode.push(\`G0 X\${slots[0].leftPrimary.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G0 Y\${slots[0].leftPrimary.toFixed(3)}\`);
+                  }
+                }
+              }
+              gcode.push('');
+
+              // BACK SIDE - ALL DEPTH PASSES
+              gcode.push('(Back side corners - all depths)');
+              gcode.push('G0 Z5.0');
+              if (orientation === 'X') {
+                gcode.push(\`G0 X\${slots[0].leftPrimary.toFixed(3)} Y\${backEntry.toFixed(3)}\`);
+              } else {
+                gcode.push(\`G0 X\${backEntry.toFixed(3)} Y\${slots[0].leftPrimary.toFixed(3)}\`);
+              }
+
+              for (let pass = 0; pass < numPasses; pass++) {
+                const depth = -Math.min((pass + 1) * dpp, bt);
+                gcode.push(\`(--- Layer \${pass + 1} at depth \${depth.toFixed(3)}mm ---)\`);
+                gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
+
+                for (let si = 0; si < slots.length; si++) {
+                  const slot = slots[si];
+
+                  // Back-left corner - move to position (already at depth)
+                  if (si > 0) {
+                    if (orientation === 'X') {
+                      gcode.push(\`G0 X\${slot.leftPrimary.toFixed(3)}\`);
+                    } else {
+                      gcode.push(\`G0 Y\${slot.leftPrimary.toFixed(3)}\`);
+                    }
+                  }
+                  // Cut inward
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${backTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${backTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  }
+                  // Reverse back out
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${backEntry.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${backEntry.toFixed(3)}\`);
+                  }
+
+                  // Back-right corner - move to position
+                  if (orientation === 'X') {
+                    gcode.push(\`G0 X\${slot.rightPrimary.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G0 Y\${slot.rightPrimary.toFixed(3)}\`);
+                  }
+                  // Cut inward
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${backTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${backTarget.toFixed(3)} F\${fr.toFixed(1)}\`);
+                  }
+                  // Reverse back out
+                  if (orientation === 'X') {
+                    gcode.push(\`G1 Y\${backEntry.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G1 X\${backEntry.toFixed(3)}\`);
+                  }
+                }
+
+                // Return to first slot for next depth pass
+                if (pass < numPasses - 1) {
+                  if (orientation === 'X') {
+                    gcode.push(\`G0 X\${slots[0].leftPrimary.toFixed(3)}\`);
+                  } else {
+                    gcode.push(\`G0 Y\${slots[0].leftPrimary.toFixed(3)}\`);
+                  }
+                }
+              }
+
+              gcode.push('G0 Z5.0');
+              gcode.push('');
+            }
+
+            // Clearing pass: zigzag pattern with 80% engagement to remove material
+            function generateClearingPass(pieceName, primaryOffset, numSlots, startOffset) {
+              gcode.push(\`(========== \${pieceName} - CLEARING PASS ==========)\`);
               gcode.push('');
 
               for (let i = 0; i < numSlots; i++) {
@@ -955,77 +1114,57 @@ export async function onLoad(ctx) {
                 const slotEnd = slotStart + slotWidth;
 
                 gcode.push(\`(=== \${pieceName} - Slot \${i + 1} ===)\`);
-                gcode.push('');
 
-                // Secondary axis travel (perpendicular to slot direction)
-                const secondaryStart = -extraTravelY;
-                const secondaryEnd = bt + extraTravelY;
+                // Secondary axis travel - small overrun to ensure full clearing
+                const clearingOverrun = bitRadius;
+                const secondaryStart = -clearingOverrun;
+                const secondaryEnd = bt + clearingOverrun;
 
                 // Primary axis boundaries (along slot direction)
                 const primaryMin = slotStart + bitRadius;
                 const primaryMax = slotEnd - bitRadius;
+
+                // Calculate number of passes across the slot width
+                // Use 80% engagement for faster clearing (1st pass is always 100%)
+                const clearingStepOver = bd * 0.8;
+                const slotClearWidth = primaryMax - primaryMin;
+                const numSteps = Math.ceil(slotClearWidth / clearingStepOver);
 
                 for (let pass = 0; pass < numPasses; pass++) {
                   const depth = -Math.min((pass + 1) * dpp, bt);
 
                   gcode.push(\`(Layer \${pass + 1} at depth \${depth.toFixed(3)}mm)\`);
 
-                  const centerPrimary = (primaryMin + primaryMax) / 2;
-                  const totalSpan = primaryMax - primaryMin;
-                  const stepsToEdge = Math.ceil(totalSpan / (2 * stepOver));
-
-                  let leftPrimary = centerPrimary;
-                  let rightPrimary = centerPrimary;
-
-                  // Position at center of slot, at the back/right edge
+                  // Start at front-left of slot
                   if (orientation === 'X') {
-                    gcode.push(\`G0 X\${centerPrimary.toFixed(3)} Y\${secondaryEnd.toFixed(3)}\`);
+                    gcode.push(\`G0 X\${primaryMin.toFixed(3)} Y\${secondaryStart.toFixed(3)}\`);
                   } else {
-                    gcode.push(\`G0 X\${secondaryEnd.toFixed(3)} Y\${centerPrimary.toFixed(3)}\`);
+                    gcode.push(\`G0 X\${secondaryStart.toFixed(3)} Y\${primaryMin.toFixed(3)}\`);
                   }
                   gcode.push(\`G0 Z\${depth.toFixed(3)}\`);
 
-                  // Move to front/left edge
-                  if (orientation === 'X') {
-                    gcode.push(\`G1 Y\${secondaryStart.toFixed(3)} F\${fr.toFixed(1)}\`);
-                  } else {
-                    gcode.push(\`G1 X\${secondaryStart.toFixed(3)} F\${fr.toFixed(1)}\`);
-                  }
+                  // Simple zigzag from left to right
+                  let atFront = true;
+                  for (let step = 0; step <= numSteps; step++) {
+                    const primaryPos = Math.min(primaryMin + (step * clearingStepOver), primaryMax);
 
-                  for (let step = 0; step < stepsToEdge; step++) {
-                    // Step to the right/positive on primary axis
-                    rightPrimary += stepOver;
-                    if (rightPrimary > primaryMax) rightPrimary = primaryMax;
-                    if (orientation === 'X') {
-                      gcode.push(\`G1 X\${rightPrimary.toFixed(3)}\`);
-                    } else {
-                      gcode.push(\`G1 Y\${rightPrimary.toFixed(3)}\`);
+                    // Move to this X/Y position
+                    if (step > 0) {
+                      if (orientation === 'X') {
+                        gcode.push(\`G1 X\${primaryPos.toFixed(3)} F\${fr.toFixed(1)}\`);
+                      } else {
+                        gcode.push(\`G1 Y\${primaryPos.toFixed(3)} F\${fr.toFixed(1)}\`);
+                      }
                     }
 
-                    // Move to back/right edge on secondary axis
+                    // Cut across the slot (front to back or back to front)
+                    const targetSecondary = atFront ? secondaryEnd : secondaryStart;
                     if (orientation === 'X') {
-                      gcode.push(\`G1 Y\${secondaryEnd.toFixed(3)}\`);
+                      gcode.push(\`G1 Y\${targetSecondary.toFixed(3)} F\${fr.toFixed(1)}\`);
                     } else {
-                      gcode.push(\`G1 X\${secondaryEnd.toFixed(3)}\`);
+                      gcode.push(\`G1 X\${targetSecondary.toFixed(3)} F\${fr.toFixed(1)}\`);
                     }
-
-                    // Step to the left/negative on primary axis
-                    leftPrimary -= stepOver;
-                    if (leftPrimary < primaryMin) leftPrimary = primaryMin;
-                    if (orientation === 'X') {
-                      gcode.push(\`G1 X\${leftPrimary.toFixed(3)}\`);
-                    } else {
-                      gcode.push(\`G1 Y\${leftPrimary.toFixed(3)}\`);
-                    }
-
-                    // Move to front/left edge on secondary axis
-                    if (orientation === 'X') {
-                      gcode.push(\`G1 Y\${secondaryStart.toFixed(3)}\`);
-                    } else {
-                      gcode.push(\`G1 X\${secondaryStart.toFixed(3)}\`);
-                    }
-
-                    if (leftPrimary <= primaryMin && rightPrimary >= primaryMax) break;
+                    atFront = !atFront;
                   }
 
                   gcode.push('');
@@ -1041,19 +1180,30 @@ export async function onLoad(ctx) {
               // Piece A: starts with finger, (fingerCount - 1) slots
               const numSlotsA = fingerCount - 1;
               const startOffsetA = fw; // First slot starts after first finger
-              generateSlotsForPiece('Piece A', 0, numSlotsA, startOffsetA);
 
               // Piece B: starts with slot, fingerCount slots
               // Piece B is positioned after Piece A along the primary axis
               // (X=bw for X orientation, Y=bw for Y orientation)
               const numSlotsB = fingerCount;
               const startOffsetB = 0; // First slot starts at the edge
-              generateSlotsForPiece('Piece B', bw, numSlotsB, startOffsetB);
+
+              // 1st Pass: Scoring (prevents tear-out)
+              generateScoringPass('Piece A', 0, numSlotsA, startOffsetA);
+              generateScoringPass('Piece B', bw, numSlotsB, startOffsetB);
+
+              // 2nd Pass: Clearing
+              generateClearingPass('Piece A', 0, numSlotsA, startOffsetA);
+              generateClearingPass('Piece B', bw, numSlotsB, startOffsetB);
             } else {
               // Single piece mode
               const numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
               const startOffset = pieceType === 'A' ? fw : 0;
-              generateSlotsForPiece('Piece ' + pieceType, 0, numSlots, startOffset);
+
+              // 1st Pass: Scoring (prevents tear-out)
+              generateScoringPass('Piece ' + pieceType, 0, numSlots, startOffset);
+
+              // 2nd Pass: Clearing
+              generateClearingPass('Piece ' + pieceType, 0, numSlots, startOffset);
             }
 
             // Footer
