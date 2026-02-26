@@ -1,14 +1,23 @@
 {
   "id": "com.ncsender.boxjoints",
   "name": "BoxJoints",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "minAppVersion": "0.3.19",
   "author": "ncSender",
   "description": "Box joints generator for CNC",
   "entry": "index.js",
+  "configUi": "config.html",
   "icon": "logo.png",
   "category": "gcode-generator",
   "repository": "https://github.com/siganberg/ncsender-plugin-boxjoints",
+  "platforms": {
+    "v1": "0.3.19",
+    "pro-v1": "0.3.19",
+    "pro-v2": "2.0.0"
+  },
   "events": [],
-  "permissions": ["gcode.modify"]
+  "permissions": ["gcode.modify"],
+  "toolMenu": [
+    { "id": "open-config", "label": "Box Joints", "icon": "logo.png", "clientOnly": true }
+  ]
 }

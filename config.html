@@ -1,0 +1,1162 @@
+<style>
+  .boxjoints-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 30px;
+    gap: 16px;
+    color: var(--color-text-secondary);
+  }
+  .boxjoints-loading .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: bj-spin 0.8s linear infinite;
+  }
+  @keyframes bj-spin {
+    to { transform: rotate(360deg); }
+  }
+  .boxjoints-layout {
+    display: flex;
+    flex-direction: column;
+    max-width: 800px;
+    width: 100%;
+  }
+  .form-column {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .plugin-dialog-footer {
+    grid-column: 1 / -1;
+    padding: 16px 20px;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .form-cards-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 12px;
+    row-gap: 20px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .form-card {
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-medium);
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.15);
+    box-sizing: border-box;
+    min-width: 0;
+  }
+  .form-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: center;
+  }
+  .calculated-info {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    padding: 12px;
+    margin-top: 16px;
+    font-size: 0.85rem;
+  }
+  .calculated-info-title {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+  }
+  .calculated-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    color: var(--color-text-secondary);
+  }
+  .calculated-label { font-weight: 500; }
+  .calculated-value { font-weight: 600; color: var(--color-accent); }
+  .validation-tooltip {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #dc3545;
+    color: white;
+    padding: 8px 12px;
+    border-radius: var(--radius-small);
+    font-size: 0.8rem;
+    margin-top: 4px;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    display: none;
+  }
+  .validation-tooltip::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: 20px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid #dc3545;
+  }
+  .form-group { position: relative; display: flex; flex-direction: column; }
+  .form-group.has-error .validation-tooltip { display: block; }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-row.coolant-row {
+    grid-template-columns: 1fr;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    justify-content: space-between;
+  }
+  .coolant-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+  }
+  .coolant-controls { flex: 1; display: flex; gap: 24px; justify-content: flex-end; }
+  .coolant-control { flex: 1; display: flex; justify-content: flex-end; }
+  label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    color: var(--color-text-primary);
+    text-align: center;
+  }
+  input[type="number"] {
+    padding: 8px;
+    text-align: center;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    font-size: 0.9rem;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+  input[type="number"]:focus { outline: none; border-color: var(--color-accent); }
+  input[type="number"].input-error { border-color: #dc3545; }
+  select {
+    padding: 8px;
+    text-align: center;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-small);
+    font-size: 0.9rem;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--color-accent); }
+  .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--color-surface-muted);
+    border: 1px solid var(--color-border);
+    transition: 0.3s;
+    border-radius: 24px;
+  }
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--color-text-primary);
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+  input:checked + .toggle-slider { background-color: var(--color-accent); border-color: var(--color-accent); }
+  input:checked + .toggle-slider:before { transform: translateX(20px); background-color: white; }
+  .button-group { display: flex; gap: 10px; justify-content: center; }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-small);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn-secondary { background: var(--color-surface-muted); color: var(--color-text-primary); border: 1px solid var(--color-border); }
+  .btn-primary { background: var(--color-accent); color: white; }
+  @media (max-width: 600px) {
+    .form-row { grid-template-columns: 1fr; }
+    .form-cards-container { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div id="boxjoints-root">
+  <div class="boxjoints-loading">
+    <div class="spinner"></div>
+    <span>Loading...</span>
+  </div>
+</div>
+
+<script>
+(function() {
+  var FALLBACK_PORT = __SERVER_PORT__;
+  var initialConfig = __INITIAL_CONFIG__;
+
+  var resolveApiBaseUrl = function() {
+    if (window.ncSender && typeof window.ncSender.getApiBaseUrl === 'function') {
+      return window.ncSender.getApiBaseUrl(FALLBACK_PORT);
+    }
+    return '';
+  };
+
+  var BASE_URL = resolveApiBaseUrl();
+  var INCH_TO_MM = 25.4;
+  var MM_TO_INCH = 0.0393701;
+
+  async function init() {
+    try {
+      var settingsResponse = await fetch(BASE_URL + '/api/settings');
+      var appSettings = await settingsResponse.json();
+
+      var unitsPreference = appSettings.unitsPreference || 'metric';
+      var isImperial = unitsPreference === 'imperial';
+      var distanceUnit = isImperial ? 'in' : 'mm';
+      var feedRateUnit = isImperial ? 'in/min' : 'mm/min';
+
+      var convertToDisplay = function(value) {
+        return isImperial ? parseFloat((value * MM_TO_INCH).toFixed(4)) : value;
+      };
+
+      var savedSettings = (initialConfig && initialConfig.boxjoints) || {};
+      var settings = {
+        boardThickness: convertToDisplay(savedSettings.boardThickness != null ? savedSettings.boardThickness : 19),
+        boardWidth: convertToDisplay(savedSettings.boardWidth != null ? savedSettings.boardWidth : 100),
+        fingerCount: savedSettings.fingerCount != null ? savedSettings.fingerCount : 4,
+        bitDiameter: convertToDisplay(savedSettings.bitDiameter != null ? savedSettings.bitDiameter : 6.35),
+        fitTolerance: convertToDisplay(savedSettings.fitTolerance != null ? savedSettings.fitTolerance : 0.1),
+        pieceType: savedSettings.pieceType || 'A',
+        orientation: savedSettings.orientation || 'X',
+        depthPerPass: convertToDisplay(savedSettings.depthPerPass != null ? savedSettings.depthPerPass : 3),
+        feedRate: convertToDisplay(savedSettings.feedRate != null ? savedSettings.feedRate : 1000),
+        spindleRpm: savedSettings.spindleRpm != null ? savedSettings.spindleRpm : 18000,
+        spindleDelay: savedSettings.spindleDelay != null ? savedSettings.spindleDelay : 3,
+        mistM7: savedSettings.mistM7 != null ? savedSettings.mistM7 : false,
+        floodM8: savedSettings.floodM8 != null ? savedSettings.floodM8 : false
+      };
+
+      renderForm(settings, isImperial, distanceUnit, feedRateUnit);
+    } catch (err) {
+      console.error('BoxJoints init error:', err);
+      document.getElementById('boxjoints-root').innerHTML =
+        '<div style="padding: 30px; text-align: center; color: var(--color-text-secondary);">' +
+        '<h3 style="color: var(--color-text-primary);">Error Loading Plugin</h3>' +
+        '<p>' + err.message + '</p></div>';
+    }
+  }
+
+  function renderForm(settings, isImperial, distanceUnit, feedRateUnit) {
+    var root = document.getElementById('boxjoints-root');
+
+    var html = '<div class="boxjoints-layout">' +
+      '<div class="form-column">' +
+        '<form id="boxjointsForm" novalidate>' +
+          '<div class="form-cards-container">' +
+            '<div style="display: flex; flex-direction: column; gap: 12px;">' +
+              '<div class="form-card">' +
+                '<div class="form-card-title">Dimensions</div>' +
+                '<div class="form-row">' +
+                  '<div class="form-group">' +
+                    '<label for="boardThickness">Board Thickness (' + distanceUnit + ')</label>' +
+                    '<input type="number" id="boardThickness" step="0.1" value="' + settings.boardThickness + '" required>' +
+                    '<div class="validation-tooltip" id="boardThickness-error"></div>' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label for="boardWidth">Board Width (' + distanceUnit + ')</label>' +
+                    '<input type="number" id="boardWidth" step="0.1" value="' + settings.boardWidth + '" required>' +
+                    '<div class="validation-tooltip" id="boardWidth-error"></div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="form-row">' +
+                  '<div class="form-group">' +
+                    '<label for="fingerCount">Finger Count</label>' +
+                    '<input type="number" id="fingerCount" step="1" min="2" max="20" value="' + settings.fingerCount + '" required>' +
+                    '<div class="validation-tooltip" id="fingerCount-error"></div>' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label for="fitTolerance">Fit Tolerance (' + distanceUnit + ')</label>' +
+                    '<input type="number" id="fitTolerance" step="0.01" value="' + settings.fitTolerance + '" required>' +
+                    '<div class="validation-tooltip" id="fitTolerance-error"></div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="form-row">' +
+                  '<div class="form-group">' +
+                    '<label for="pieceType">Piece Type</label>' +
+                    '<select id="pieceType">' +
+                      '<option value="A"' + (settings.pieceType === 'A' ? ' selected' : '') + '>A (pins)</option>' +
+                      '<option value="B"' + (settings.pieceType === 'B' ? ' selected' : '') + '>B (tails)</option>' +
+                      '<option value="Both"' + (settings.pieceType === 'Both' ? ' selected' : '') + '>Both (pins &amp; tails)</option>' +
+                    '</select>' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label for="orientation">Orientation</label>' +
+                    '<select id="orientation">' +
+                      '<option value="X"' + (settings.orientation === 'X' ? ' selected' : '') + '>X (horizontal)</option>' +
+                      '<option value="Y"' + (settings.orientation === 'Y' ? ' selected' : '') + '>Y (vertical)</option>' +
+                    '</select>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="form-row single">' +
+                  '<div class="form-group">' +
+                    '<label for="depthPerPass">Depth Per Pass (' + distanceUnit + ')</label>' +
+                    '<input type="number" id="depthPerPass" step="0.1" value="' + settings.depthPerPass + '" required>' +
+                    '<div class="validation-tooltip" id="depthPerPass-error"></div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="form-card">' +
+                '<div class="form-card-title">Machine Settings</div>' +
+                '<div class="form-row">' +
+                  '<div class="form-group">' +
+                    '<label for="bitDiameter">Bit Diameter (' + distanceUnit + ')</label>' +
+                    '<input type="number" id="bitDiameter" step="0.01" value="' + settings.bitDiameter + '" required>' +
+                    '<div class="validation-tooltip" id="bitDiameter-error"></div>' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label for="feedRate">Feed Rate (' + feedRateUnit + ')</label>' +
+                    '<input type="number" id="feedRate" step="1" value="' + settings.feedRate + '" required>' +
+                    '<div class="validation-tooltip" id="feedRate-error"></div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="form-row">' +
+                  '<div class="form-group">' +
+                    '<label for="spindleRpm">Spindle RPM</label>' +
+                    '<input type="number" id="spindleRpm" step="1" value="' + settings.spindleRpm + '" required>' +
+                    '<div class="validation-tooltip" id="spindleRpm-error"></div>' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label for="spindleDelay">Spindle Delay (s)</label>' +
+                    '<input type="number" id="spindleDelay" min="0" max="30" step="1" value="' + settings.spindleDelay + '">' +
+                  '</div>' +
+                '</div>' +
+                '<div class="form-row coolant-row">' +
+                  '<div class="coolant-label">Mist Coolant</div>' +
+                  '<div class="coolant-control">' +
+                    '<label class="toggle-switch">' +
+                      '<input type="checkbox" id="mistM7"' + (settings.mistM7 ? ' checked' : '') + '>' +
+                      '<span class="toggle-slider"></span>' +
+                    '</label>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="form-row coolant-row">' +
+                  '<div class="coolant-label">Flood Coolant</div>' +
+                  '<div class="coolant-control">' +
+                    '<label class="toggle-switch">' +
+                      '<input type="checkbox" id="floodM8"' + (settings.floodM8 ? ' checked' : '') + '>' +
+                      '<span class="toggle-slider"></span>' +
+                    '</label>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="form-card">' +
+              '<div class="form-card-title">Calculated Dimensions</div>' +
+              '<div id="legend-container" style="margin-bottom: 16px;"></div>' +
+              '<div id="preview-container"></div>' +
+              '<div id="instruction-container"></div>' +
+            '</div>' +
+          '</div>' +
+        '</form>' +
+      '</div>' +
+    '</div>' +
+    '<div class="plugin-dialog-footer">' +
+      '<div class="button-group">' +
+        '<button type="button" class="btn btn-secondary" id="btnClose">Close</button>' +
+        '<button type="button" class="btn btn-primary" id="btnGenerate">Generate</button>' +
+      '</div>' +
+    '</div>';
+
+    root.innerHTML = html;
+
+    document.getElementById('btnClose').addEventListener('click', function() {
+      window.postMessage({ type: 'close-plugin-dialog' }, '*');
+    });
+    document.getElementById('btnGenerate').addEventListener('click', function() {
+      document.getElementById('boxjointsForm').requestSubmit();
+    });
+
+    initFormLogic(isImperial);
+  }
+
+  function initFormLogic(isImperial) {
+    var validationRules = isImperial ? {
+      boardThickness: { min: 0.1, max: 4, label: 'Board Thickness' },
+      boardWidth: { min: 1, max: 48, label: 'Board Width' },
+      fingerCount: { min: 2, max: 20, label: 'Finger Count', integer: true },
+      bitDiameter: { min: 0.1, max: 1, label: 'Bit Diameter' },
+      fitTolerance: { min: 0, max: 0.1, label: 'Fit Tolerance' },
+      depthPerPass: { min: 0.01, max: 4, label: 'Depth Per Pass' },
+      feedRate: { min: 10, max: 500, label: 'Feed Rate' },
+      spindleRpm: { min: 1000, max: 30000, label: 'Spindle RPM' }
+    } : {
+      boardThickness: { min: 3, max: 100, label: 'Board Thickness' },
+      boardWidth: { min: 25, max: 1200, label: 'Board Width' },
+      fingerCount: { min: 2, max: 20, label: 'Finger Count', integer: true },
+      bitDiameter: { min: 3, max: 25, label: 'Bit Diameter' },
+      fitTolerance: { min: 0, max: 2, label: 'Fit Tolerance' },
+      depthPerPass: { min: 0.5, max: 100, label: 'Depth Per Pass' },
+      feedRate: { min: 100, max: 10000, label: 'Feed Rate' },
+      spindleRpm: { min: 1000, max: 30000, label: 'Spindle RPM' }
+    };
+
+    function validateInput(fieldId) {
+      var input = document.getElementById(fieldId);
+      var errorDiv = document.getElementById(fieldId + '-error');
+      var formGroup = input ? input.closest('.form-group') : null;
+      var value = parseFloat(input.value);
+      var rules = validationRules[fieldId];
+
+      if (!rules || !input) return true;
+
+      if (isNaN(value)) {
+        input.classList.add('input-error');
+        if (formGroup) formGroup.classList.add('has-error');
+        if (errorDiv) errorDiv.textContent = rules.label + ' is required';
+        return false;
+      }
+
+      if (rules.integer && !Number.isInteger(value)) {
+        input.classList.add('input-error');
+        if (formGroup) formGroup.classList.add('has-error');
+        if (errorDiv) errorDiv.textContent = rules.label + ' must be a whole number';
+        return false;
+      }
+
+      if (value < rules.min || value > rules.max) {
+        input.classList.add('input-error');
+        if (formGroup) formGroup.classList.add('has-error');
+        if (errorDiv) errorDiv.textContent = 'Must be between ' + rules.min + ' and ' + rules.max;
+        return false;
+      }
+
+      input.classList.remove('input-error');
+      if (formGroup) formGroup.classList.remove('has-error');
+      if (errorDiv) errorDiv.textContent = '';
+      return true;
+    }
+
+    function validateAllInputs() {
+      var fields = Object.keys(validationRules);
+      var isValid = true;
+      fields.forEach(function(field) {
+        if (!validateInput(field)) {
+          isValid = false;
+        }
+      });
+      return isValid;
+    }
+
+    function validateSlotVsBit() {
+      var boardWidth = parseFloat(document.getElementById('boardWidth').value);
+      var fingerCount = parseInt(document.getElementById('fingerCount').value);
+      var fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
+      var bitDiameter = parseFloat(document.getElementById('bitDiameter').value);
+      var pieceType = document.getElementById('pieceType').value;
+
+      var fingerCountInput = document.getElementById('fingerCount');
+      var fingerCountErrorDiv = document.getElementById('fingerCount-error');
+      var fingerCountFormGroup = fingerCountInput ? fingerCountInput.closest('.form-group') : null;
+
+      if (isNaN(boardWidth) || isNaN(fingerCount) || isNaN(bitDiameter) || fingerCount <= 0) {
+        fingerCountInput.classList.remove('input-error');
+        if (fingerCountFormGroup) fingerCountFormGroup.classList.remove('has-error');
+        if (fingerCountErrorDiv) fingerCountErrorDiv.textContent = '';
+        return true;
+      }
+
+      var convertToMetric = function(value) { return isImperial ? value * INCH_TO_MM : value; };
+      var boardWidthMetric = convertToMetric(boardWidth);
+      var bitDiameterMetric = convertToMetric(bitDiameter);
+      var fitToleranceMetric = convertToMetric(fitTolerance || 0);
+      var numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
+      var calculatedFingerWidth = (boardWidthMetric - (numSlots * fitToleranceMetric)) / ((fingerCount * 2) - 1);
+      var calculatedSlotWidth = calculatedFingerWidth + fitToleranceMetric;
+
+      if (calculatedSlotWidth < bitDiameterMetric) {
+        fingerCountInput.classList.add('input-error');
+        if (fingerCountFormGroup) fingerCountFormGroup.classList.add('has-error');
+        if (fingerCountErrorDiv) {
+          fingerCountErrorDiv.textContent = 'Slot width (' + calculatedSlotWidth.toFixed(2) + 'mm) is smaller than bit diameter (' + bitDiameterMetric.toFixed(2) + 'mm). Use fewer fingers or smaller bit.';
+        }
+        return false;
+      } else {
+        fingerCountInput.classList.remove('input-error');
+        if (fingerCountFormGroup) fingerCountFormGroup.classList.remove('has-error');
+        if (fingerCountErrorDiv) fingerCountErrorDiv.textContent = '';
+        return true;
+      }
+    }
+
+    function updateCalculatedDimensions() {
+      var boardWidth = parseFloat(document.getElementById('boardWidth').value);
+      var fingerCount = parseInt(document.getElementById('fingerCount').value);
+      var fitTolerance = parseFloat(document.getElementById('fitTolerance').value);
+      var pieceType = document.getElementById('pieceType').value;
+      var orientation = document.getElementById('orientation').value;
+
+      if (!isNaN(boardWidth) && !isNaN(fingerCount) && fingerCount > 0) {
+        var convertToMetric = function(value) { return isImperial ? value * INCH_TO_MM : value; };
+        var boardWidthMetric = convertToMetric(boardWidth);
+        var fitToleranceMetric = convertToMetric(fitTolerance || 0);
+        var fingerWidth = (boardWidthMetric - ((fingerCount - 1) * fitToleranceMetric)) / ((fingerCount * 2) - 1);
+        var slotWidth = fingerWidth + fitToleranceMetric;
+        updatePreview(fingerWidth, slotWidth, fingerCount, pieceType, orientation);
+      } else {
+        document.getElementById('preview-container').innerHTML = '';
+        document.getElementById('legend-container').innerHTML = '';
+      }
+      validateSlotVsBit();
+    }
+
+    function updatePreview(fingerWidth, slotWidth, fingerCount, pieceType, orientation) {
+      var previewContainer = document.getElementById('preview-container');
+      var legendContainer = document.getElementById('legend-container');
+      var instructionContainer = document.getElementById('instruction-container');
+      if (!previewContainer || !legendContainer) return;
+
+      var boardThickness = parseFloat(document.getElementById('boardThickness').value) || 0;
+      var boardWidthInput = parseFloat(document.getElementById('boardWidth').value) || 0;
+
+      var padding = 0;
+      var availableWidth = previewContainer.offsetWidth - (padding * 2);
+
+      var numFingersA = fingerCount;
+      var numSlotsA = fingerCount - 1;
+      var totalWidth = (fingerWidth * numFingersA) + (slotWidth * numSlotsA);
+      var scale = availableWidth / totalWidth;
+      var svgWidth = availableWidth + (padding * 2);
+
+      var woodColorA = '#E8C9A0';
+      var woodColorB = '#E8C9A0';
+      var textColor = '#6B5538';
+
+      var stockWidthColor = '#E74C3C';
+      var slotWidthColor = '#3498DB';
+      var fingerWidthColor = '#2ECC71';
+      var boardThicknessColor = '#9B59B6';
+
+      var woodGrainDefs =
+        '<defs>' +
+          '<pattern id="woodGrainA" patternUnits="userSpaceOnUse" width="200" height="12">' +
+            '<rect width="200" height="12" fill="' + woodColorA + '"/>' +
+            '<path d="M0,2 Q50,0 100,3 T200,2" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.6"/>' +
+            '<path d="M0,6 Q40,4 80,7 T160,5 T200,6" stroke="#C9A882" stroke-width="0.8" fill="none" opacity="0.5"/>' +
+            '<path d="M0,10 Q60,8 120,11 T200,9" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.4"/>' +
+          '</pattern>' +
+          '<pattern id="woodGrainB" patternUnits="userSpaceOnUse" width="200" height="12">' +
+            '<rect width="200" height="12" fill="' + woodColorB + '"/>' +
+            '<path d="M0,2 Q50,0 100,3 T200,2" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.6"/>' +
+            '<path d="M0,6 Q40,4 80,7 T160,5 T200,6" stroke="#C9A882" stroke-width="0.8" fill="none" opacity="0.5"/>' +
+            '<path d="M0,10 Q60,8 120,11 T200,9" stroke="#D4B896" stroke-width="0.5" fill="none" opacity="0.4"/>' +
+          '</pattern>' +
+        '</defs>';
+
+      if (pieceType === 'Both') {
+        var boardHeight = 120;
+        var fingerHeight = 16;
+        var gapBetweenPieces = 20;
+        var svgHeight = (boardHeight + fingerHeight) * 2 + gapBetweenPieces + 20;
+
+        var svg = '<svg width="' + svgWidth + '" height="' + svgHeight + '" style="display: block; margin: 0 auto;">';
+        svg += woodGrainDefs;
+
+        var pieceATopY = 10;
+        var pieceABoardY = pieceATopY + fingerHeight;
+        svg += '<rect x="' + padding + '" y="' + pieceABoardY + '" width="' + (totalWidth * scale) + '" height="' + boardHeight + '" fill="url(#woodGrainA)"/>';
+
+        var x = padding;
+        var totalElements = (2 * fingerCount) - 1;
+        for (var i = 0; i < totalElements; i++) {
+          var isFinger = (i % 2 === 0);
+          var w = (isFinger ? fingerWidth : slotWidth) * scale;
+          if (isFinger) {
+            svg += '<rect x="' + x + '" y="' + pieceATopY + '" width="' + w + '" height="' + fingerHeight + '" fill="url(#woodGrainA)"/>';
+          }
+          x += w;
+        }
+        var pieceALabelY = pieceABoardY + (boardHeight / 2) + 5;
+        svg += '<text x="' + (svgWidth / 2) + '" y="' + pieceALabelY + '" text-anchor="middle" fill="' + textColor + '" font-size="14" font-weight="600" font-family="system-ui">Piece A (pins)</text>';
+
+        var pieceBTopY = pieceABoardY + boardHeight + gapBetweenPieces;
+        var pieceBBoardY = pieceBTopY + fingerHeight;
+        svg += '<rect x="' + padding + '" y="' + pieceBBoardY + '" width="' + (totalWidth * scale) + '" height="' + boardHeight + '" fill="url(#woodGrainB)"/>';
+
+        x = padding;
+        for (var i = 0; i < totalElements; i++) {
+          var isFinger = (i % 2 === 1);
+          var w = (isFinger ? fingerWidth : slotWidth) * scale;
+          if (isFinger) {
+            svg += '<rect x="' + x + '" y="' + pieceBTopY + '" width="' + w + '" height="' + fingerHeight + '" fill="url(#woodGrainB)"/>';
+          }
+          x += w;
+        }
+        var pieceBLabelY = pieceBBoardY + (boardHeight / 2) + 5;
+        svg += '<text x="' + (svgWidth / 2) + '" y="' + pieceBLabelY + '" text-anchor="middle" fill="' + textColor + '" font-size="14" font-weight="600" font-family="system-ui">Piece B (tails)</text>';
+
+        var pieceABottomY = pieceABoardY + boardHeight;
+        svg += '<line x1="' + padding + '" y1="' + pieceABottomY + '" x2="' + (padding + totalWidth * scale) + '" y2="' + pieceABottomY + '" stroke="' + stockWidthColor + '" stroke-width="4"/>';
+
+        var pieceBBottomY = pieceBBoardY + boardHeight;
+        svg += '<line x1="' + padding + '" y1="' + pieceBBottomY + '" x2="' + (padding + totalWidth * scale) + '" y2="' + pieceBBottomY + '" stroke="' + stockWidthColor + '" stroke-width="4"/>';
+
+        var firstSlotStartA = padding + fingerWidth * scale;
+        var firstSlotEndA = firstSlotStartA + (slotWidth * scale);
+        svg += '<line x1="' + firstSlotStartA + '" y1="' + pieceABoardY + '" x2="' + firstSlotEndA + '" y2="' + pieceABoardY + '" stroke="' + slotWidthColor + '" stroke-width="3"/>';
+
+        svg += '<line x1="' + firstSlotEndA + '" y1="' + pieceATopY + '" x2="' + firstSlotEndA + '" y2="' + pieceABoardY + '" stroke="' + boardThicknessColor + '" stroke-width="3"/>';
+
+        var firstFingerEndA = padding + (fingerWidth * scale);
+        svg += '<line x1="' + padding + '" y1="' + pieceATopY + '" x2="' + firstFingerEndA + '" y2="' + pieceATopY + '" stroke="' + fingerWidthColor + '" stroke-width="3"/>';
+
+        svg += '</svg>';
+        previewContainer.innerHTML = svg;
+      } else {
+        var svgHeight = 300;
+        var boardHeight = 260;
+        var fingerHeight = 20;
+        var boardTopY = 10;
+
+        var svg = '<svg width="' + svgWidth + '" height="' + svgHeight + '" style="display: block; margin: 0 auto;">';
+        svg += woodGrainDefs;
+
+        var woodPattern = pieceType === 'A' ? 'url(#woodGrainA)' : 'url(#woodGrainB)';
+        var boardY = boardTopY + fingerHeight;
+        var numFingers = pieceType === 'A' ? fingerCount : (fingerCount - 1);
+        var numSlots = pieceType === 'A' ? (fingerCount - 1) : fingerCount;
+        var singleTotalWidth = (fingerWidth * numFingers) + (slotWidth * numSlots);
+        var singleScale = availableWidth / singleTotalWidth;
+
+        svg += '<rect x="' + padding + '" y="' + boardY + '" width="' + (singleTotalWidth * singleScale) + '" height="' + boardHeight + '" fill="' + woodPattern + '"/>';
+
+        var x = padding;
+        var totalElements = (2 * fingerCount) - 1;
+        for (var i = 0; i < totalElements; i++) {
+          var isFinger = pieceType === 'A' ? (i % 2 === 0) : (i % 2 === 1);
+          var w = (isFinger ? fingerWidth : slotWidth) * singleScale;
+          if (isFinger) {
+            svg += '<rect x="' + x + '" y="' + boardTopY + '" width="' + w + '" height="' + fingerHeight + '" fill="' + woodPattern + '"/>';
+          }
+          x += w;
+        }
+
+        var labelY = boardY + (boardHeight / 2) + 5;
+        var pieceLabel = pieceType === 'A' ? 'Piece A (pins)' : 'Piece B (tails)';
+        svg += '<text x="' + (svgWidth / 2) + '" y="' + labelY + '" text-anchor="middle" fill="' + textColor + '" font-size="16" font-weight="600" font-family="system-ui">' + pieceLabel + '</text>';
+
+        var boardBottomY = boardY + boardHeight;
+        svg += '<line x1="' + padding + '" y1="' + boardBottomY + '" x2="' + (padding + singleTotalWidth * singleScale) + '" y2="' + boardBottomY + '" stroke="' + stockWidthColor + '" stroke-width="5"/>';
+
+        var firstSlotStart = pieceType === 'A' ? (padding + fingerWidth * singleScale) : padding;
+        var firstSlotEnd = firstSlotStart + (slotWidth * singleScale);
+        var slotTopY = boardY;
+        svg += '<line x1="' + firstSlotStart + '" y1="' + slotTopY + '" x2="' + firstSlotEnd + '" y2="' + slotTopY + '" stroke="' + slotWidthColor + '" stroke-width="3"/>';
+
+        var fingerTopY = boardTopY;
+        svg += '<line x1="' + firstSlotEnd + '" y1="' + fingerTopY + '" x2="' + firstSlotEnd + '" y2="' + slotTopY + '" stroke="' + boardThicknessColor + '" stroke-width="3"/>';
+
+        var firstFingerStart = pieceType === 'A' ? padding : (padding + slotWidth * singleScale);
+        var firstFingerEnd = firstFingerStart + (fingerWidth * singleScale);
+        svg += '<line x1="' + firstFingerStart + '" y1="' + fingerTopY + '" x2="' + firstFingerEnd + '" y2="' + fingerTopY + '" stroke="' + fingerWidthColor + '" stroke-width="3"/>';
+
+        svg += '</svg>';
+        previewContainer.innerHTML = svg;
+      }
+
+      var unit = 'mm';
+      var legendHTML =
+        '<div style="font-size: 13px; font-family: system-ui; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">' +
+          '<div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ' + stockWidthColor + '15; border: 1px solid ' + stockWidthColor + '40; border-radius: 8px;">' +
+            '<div style="width: 16px; height: 16px; background: ' + stockWidthColor + '; border-radius: 4px; flex-shrink: 0;"></div>' +
+            '<div style="display: flex; flex-direction: column; line-height: 1.2;">' +
+              '<span style="color: var(--color-text-secondary); font-size: 11px;">Board Width</span>' +
+              '<span style="color: ' + stockWidthColor + '; font-weight: 600;">' + boardWidthInput.toFixed(1) + ' ' + unit + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ' + boardThicknessColor + '15; border: 1px solid ' + boardThicknessColor + '40; border-radius: 8px;">' +
+            '<div style="width: 16px; height: 16px; background: ' + boardThicknessColor + '; border-radius: 4px; flex-shrink: 0;"></div>' +
+            '<div style="display: flex; flex-direction: column; line-height: 1.2;">' +
+              '<span style="color: var(--color-text-secondary); font-size: 11px;">Board Thickness</span>' +
+              '<span style="color: ' + boardThicknessColor + '; font-weight: 600;">' + boardThickness.toFixed(1) + ' ' + unit + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ' + fingerWidthColor + '15; border: 1px solid ' + fingerWidthColor + '40; border-radius: 8px;">' +
+            '<div style="width: 16px; height: 16px; background: ' + fingerWidthColor + '; border-radius: 4px; flex-shrink: 0;"></div>' +
+            '<div style="display: flex; flex-direction: column; line-height: 1.2;">' +
+              '<span style="color: var(--color-text-secondary); font-size: 11px;">Finger Width</span>' +
+              '<span style="color: ' + fingerWidthColor + '; font-weight: 600;">' + fingerWidth.toFixed(1) + ' ' + unit + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: ' + slotWidthColor + '15; border: 1px solid ' + slotWidthColor + '40; border-radius: 8px;">' +
+            '<div style="width: 16px; height: 16px; background: ' + slotWidthColor + '; border-radius: 4px; flex-shrink: 0;"></div>' +
+            '<div style="display: flex; flex-direction: column; line-height: 1.2;">' +
+              '<span style="color: var(--color-text-secondary); font-size: 11px;">Slot Width</span>' +
+              '<span style="color: ' + slotWidthColor + '; font-weight: 600;">' + slotWidth.toFixed(1) + ' ' + unit + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+      legendContainer.innerHTML = legendHTML;
+
+      if (instructionContainer) {
+        var instructionText = '';
+        var orientationDesc = orientation === 'X' ? 'horizontal (along X-axis)' : 'vertical (along Y-axis)';
+        if (pieceType === 'Both') {
+          if (orientation === 'X') {
+            instructionText = 'Place both boards side by side with Piece A on the left and Piece B on the right. Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of Piece A.';
+          } else {
+            instructionText = 'Place both boards one above the other with Piece A at the front and Piece B behind it. Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of Piece A.';
+          }
+        } else if (pieceType === 'A') {
+          instructionText = 'Place the board for Piece A (pins). Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of the board.';
+        } else if (pieceType === 'B') {
+          instructionText = 'Place the board for Piece B (tails). Fingers are oriented ' + orientationDesc + '. Set X0 Y0 at the front-left corner of the board.';
+        }
+
+        if (instructionText) {
+          instructionContainer.innerHTML =
+            '<div style="margin-top: 16px; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; font-size: 13px; color: #856404;">' +
+            '<strong>Setup:</strong> ' + instructionText + '</div>';
+        } else {
+          instructionContainer.innerHTML = '';
+        }
+      }
+    }
+
+    Object.keys(validationRules).forEach(function(fieldId) {
+      var input = document.getElementById(fieldId);
+      if (input) {
+        input.addEventListener('blur', function() { validateInput(fieldId); });
+        input.addEventListener('input', function() {
+          if (input.classList.contains('input-error')) {
+            validateInput(fieldId);
+          }
+          if (['boardWidth', 'fingerCount', 'fitTolerance'].indexOf(fieldId) !== -1) {
+            updateCalculatedDimensions();
+          }
+        });
+
+        if (validationRules[fieldId].integer) {
+          input.addEventListener('keydown', function(e) {
+            if (e.key === '.' || e.key === ',') {
+              e.preventDefault();
+            }
+          });
+        }
+      }
+    });
+
+    ['boardWidth', 'boardThickness', 'fingerCount', 'fitTolerance', 'bitDiameter', 'pieceType', 'orientation'].forEach(function(fieldId) {
+      var input = document.getElementById(fieldId);
+      if (input) {
+        input.addEventListener(
+          (['pieceType', 'orientation'].indexOf(fieldId) !== -1) ? 'change' : 'input',
+          updateCalculatedDimensions
+        );
+      }
+    });
+
+    updateCalculatedDimensions();
+
+    function generateBoxJointsGCode(params) {
+      var boardThickness = params.boardThickness;
+      var boardWidth = params.boardWidth;
+      var fingerCount = params.fingerCount;
+      var bitDiameter = params.bitDiameter;
+      var fitTolerance = params.fitTolerance;
+      var pieceType = params.pieceType;
+      var orientation = params.orientation;
+      var depthPerPass = params.depthPerPass;
+      var feedRate = params.feedRate;
+      var spindleRpm = params.spindleRpm;
+      var spindleDelay = params.spindleDelay;
+      var mistM7 = params.mistM7;
+      var floodM8 = params.floodM8;
+
+      var convertToMetric = function(value) { return isImperial ? value * INCH_TO_MM : value; };
+      var bt = convertToMetric(boardThickness);
+      var bw = convertToMetric(boardWidth);
+      var bd = convertToMetric(bitDiameter);
+      var ft = convertToMetric(fitTolerance);
+      var dpp = convertToMetric(depthPerPass);
+      var fr = convertToMetric(feedRate);
+
+      var fw = (bw - ((fingerCount - 1) * ft)) / ((fingerCount * 2) - 1);
+
+      var gcode = [];
+
+      var pieceLabel = pieceType === 'Both' ? 'Both (A & B)' : pieceType;
+      gcode.push('(Box Joints - Piece ' + pieceLabel + ')');
+      gcode.push('(Orientation: ' + orientation + '-axis)');
+      gcode.push('(Board Thickness: ' + boardThickness + (isImperial ? 'in' : 'mm') + ')');
+      gcode.push('(Board Width: ' + boardWidth + (isImperial ? 'in' : 'mm') + ')');
+      gcode.push('(Finger Count: ' + fingerCount + ')');
+      gcode.push('(Calculated Finger Width: ' + fw.toFixed(3) + 'mm)');
+      gcode.push('(Bit Diameter: ' + bitDiameter + (isImperial ? 'in' : 'mm') + ')');
+      gcode.push('');
+
+      gcode.push('G21 ; Metric units');
+      gcode.push('G90 ; Absolute positioning');
+      gcode.push('G94 ; Feed per minute');
+
+      if (mistM7) gcode.push('M7 ; Mist coolant on');
+      if (floodM8) gcode.push('M8 ; Flood coolant on');
+
+      if (spindleRpm > 0) {
+        gcode.push('M3 S' + spindleRpm + ' ; Start spindle');
+        gcode.push('G4 P' + spindleDelay + ' ; Spindle delay');
+      }
+      gcode.push('');
+
+      var slotWidth = fw + ft;
+      var numPasses = Math.ceil(bt / dpp);
+
+      gcode.push('G53 G0 Z0 ; Move to machine Z0 (safe height)');
+      gcode.push('');
+
+      var bitRadius = bd / 2;
+      var scoringDepth = 5;
+
+      function generateScoringPass(pieceName, primaryOffset, numSlots, startOffset) {
+        gcode.push('(========== ' + pieceName + ' - SCORING PASS ==========)');
+        gcode.push('(Cutting into corners to prevent tear-out)');
+        gcode.push('');
+
+        var slots = [];
+        for (var i = 0; i < numSlots; i++) {
+          var slotStart = primaryOffset + startOffset + (i * (fw + slotWidth));
+          var slotEnd = slotStart + slotWidth;
+          var leftPrimary = slotStart + bitRadius;
+          var rightPrimary = slotEnd - bitRadius;
+          slots.push({ index: i + 1, leftPrimary: leftPrimary, rightPrimary: rightPrimary });
+        }
+
+        var frontEntry = -bitRadius - 2;
+        var frontTarget = scoringDepth;
+        var backEntry = bt + bitRadius + 2;
+        var backTarget = bt - scoringDepth;
+
+        gcode.push('(Front side corners - all depths)');
+        if (orientation === 'X') {
+          gcode.push('G0 X' + slots[0].leftPrimary.toFixed(3) + ' Y' + frontEntry.toFixed(3));
+        } else {
+          gcode.push('G0 X' + frontEntry.toFixed(3) + ' Y' + slots[0].leftPrimary.toFixed(3));
+        }
+
+        for (var pass = 0; pass < numPasses; pass++) {
+          var depth = -Math.min((pass + 1) * dpp, bt);
+          gcode.push('(--- Layer ' + (pass + 1) + ' at depth ' + depth.toFixed(3) + 'mm ---)');
+          gcode.push('G0 Z' + depth.toFixed(3));
+
+          for (var si = 0; si < slots.length; si++) {
+            var slot = slots[si];
+
+            if (si > 0) {
+              if (orientation === 'X') {
+                gcode.push('G0 X' + slot.leftPrimary.toFixed(3));
+              } else {
+                gcode.push('G0 Y' + slot.leftPrimary.toFixed(3));
+              }
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + frontTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            } else {
+              gcode.push('G1 X' + frontTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + frontEntry.toFixed(3));
+            } else {
+              gcode.push('G1 X' + frontEntry.toFixed(3));
+            }
+
+            if (orientation === 'X') {
+              gcode.push('G0 X' + slot.rightPrimary.toFixed(3));
+            } else {
+              gcode.push('G0 Y' + slot.rightPrimary.toFixed(3));
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + frontTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            } else {
+              gcode.push('G1 X' + frontTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + frontEntry.toFixed(3));
+            } else {
+              gcode.push('G1 X' + frontEntry.toFixed(3));
+            }
+          }
+
+          if (pass < numPasses - 1) {
+            if (orientation === 'X') {
+              gcode.push('G0 X' + slots[0].leftPrimary.toFixed(3));
+            } else {
+              gcode.push('G0 Y' + slots[0].leftPrimary.toFixed(3));
+            }
+          }
+        }
+        gcode.push('');
+
+        gcode.push('(Back side corners - all depths)');
+        gcode.push('G0 Z5.0');
+        if (orientation === 'X') {
+          gcode.push('G0 X' + slots[0].leftPrimary.toFixed(3) + ' Y' + backEntry.toFixed(3));
+        } else {
+          gcode.push('G0 X' + backEntry.toFixed(3) + ' Y' + slots[0].leftPrimary.toFixed(3));
+        }
+
+        for (var pass = 0; pass < numPasses; pass++) {
+          var depth = -Math.min((pass + 1) * dpp, bt);
+          gcode.push('(--- Layer ' + (pass + 1) + ' at depth ' + depth.toFixed(3) + 'mm ---)');
+          gcode.push('G0 Z' + depth.toFixed(3));
+
+          for (var si = 0; si < slots.length; si++) {
+            var slot = slots[si];
+
+            if (si > 0) {
+              if (orientation === 'X') {
+                gcode.push('G0 X' + slot.leftPrimary.toFixed(3));
+              } else {
+                gcode.push('G0 Y' + slot.leftPrimary.toFixed(3));
+              }
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + backTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            } else {
+              gcode.push('G1 X' + backTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + backEntry.toFixed(3));
+            } else {
+              gcode.push('G1 X' + backEntry.toFixed(3));
+            }
+
+            if (orientation === 'X') {
+              gcode.push('G0 X' + slot.rightPrimary.toFixed(3));
+            } else {
+              gcode.push('G0 Y' + slot.rightPrimary.toFixed(3));
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + backTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            } else {
+              gcode.push('G1 X' + backTarget.toFixed(3) + ' F' + fr.toFixed(1));
+            }
+            if (orientation === 'X') {
+              gcode.push('G1 Y' + backEntry.toFixed(3));
+            } else {
+              gcode.push('G1 X' + backEntry.toFixed(3));
+            }
+          }
+
+          if (pass < numPasses - 1) {
+            if (orientation === 'X') {
+              gcode.push('G0 X' + slots[0].leftPrimary.toFixed(3));
+            } else {
+              gcode.push('G0 Y' + slots[0].leftPrimary.toFixed(3));
+            }
+          }
+        }
+
+        gcode.push('G0 Z5.0');
+        gcode.push('');
+      }
+
+      function generateClearingPass(pieceName, primaryOffset, numSlots, startOffset) {
+        gcode.push('(========== ' + pieceName + ' - CLEARING PASS ==========)');
+        gcode.push('');
+
+        for (var i = 0; i < numSlots; i++) {
+          var slotStart = primaryOffset + startOffset + (i * (fw + slotWidth));
+          var slotEnd = slotStart + slotWidth;
+
+          gcode.push('(=== ' + pieceName + ' - Slot ' + (i + 1) + ' ===)');
+
+          var clearingOverrun = bitRadius;
+          var secondaryStart = -clearingOverrun;
+          var secondaryEnd = bt + clearingOverrun;
+
+          var primaryMin = slotStart + bitRadius;
+          var primaryMax = slotEnd - bitRadius;
+
+          var clearingStepOver = bd * 0.8;
+          var slotClearWidth = primaryMax - primaryMin;
+          var numSteps = Math.ceil(slotClearWidth / clearingStepOver);
+
+          for (var pass = 0; pass < numPasses; pass++) {
+            var depth = -Math.min((pass + 1) * dpp, bt);
+
+            gcode.push('(Layer ' + (pass + 1) + ' at depth ' + depth.toFixed(3) + 'mm)');
+
+            if (orientation === 'X') {
+              gcode.push('G0 X' + primaryMin.toFixed(3) + ' Y' + secondaryStart.toFixed(3));
+            } else {
+              gcode.push('G0 X' + secondaryStart.toFixed(3) + ' Y' + primaryMin.toFixed(3));
+            }
+            gcode.push('G0 Z' + depth.toFixed(3));
+
+            var atFront = true;
+            for (var step = 0; step <= numSteps; step++) {
+              var primaryPos = Math.min(primaryMin + (step * clearingStepOver), primaryMax);
+
+              if (step > 0) {
+                if (orientation === 'X') {
+                  gcode.push('G1 X' + primaryPos.toFixed(3) + ' F' + fr.toFixed(1));
+                } else {
+                  gcode.push('G1 Y' + primaryPos.toFixed(3) + ' F' + fr.toFixed(1));
+                }
+              }
+
+              var targetSecondary = atFront ? secondaryEnd : secondaryStart;
+              if (orientation === 'X') {
+                gcode.push('G1 Y' + targetSecondary.toFixed(3) + ' F' + fr.toFixed(1));
+              } else {
+                gcode.push('G1 X' + targetSecondary.toFixed(3) + ' F' + fr.toFixed(1));
+              }
+              atFront = !atFront;
+            }
+
+            gcode.push('');
+          }
+
+          gcode.push('G0 Z5.0');
+          gcode.push('');
+        }
+      }
+
+      if (pieceType === 'Both') {
+        var numSlotsA = fingerCount - 1;
+        var startOffsetA = fw;
+        var numSlotsB = fingerCount;
+        var startOffsetB = 0;
+
+        generateScoringPass('Piece A', 0, numSlotsA, startOffsetA);
+        generateScoringPass('Piece B', bw, numSlotsB, startOffsetB);
+        generateClearingPass('Piece A', 0, numSlotsA, startOffsetA);
+        generateClearingPass('Piece B', bw, numSlotsB, startOffsetB);
+      } else {
+        var numSlots = pieceType === 'A' ? fingerCount - 1 : fingerCount;
+        var startOffset = pieceType === 'A' ? fw : 0;
+
+        generateScoringPass('Piece ' + pieceType, 0, numSlots, startOffset);
+        generateClearingPass('Piece ' + pieceType, 0, numSlots, startOffset);
+      }
+
+      gcode.push('G53 G0 Z0 ; Retract to machine Z0');
+      if (mistM7 || floodM8) gcode.push('M9 ; Coolant off');
+      if (spindleRpm > 0) gcode.push('M5 ; Spindle off');
+      gcode.push('M30 ; Program end');
+
+      return gcode.join('\n');
+    }
+
+    document.getElementById('boxjointsForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      if (!validateAllInputs()) return;
+
+      var displayValues = {
+        boardThickness: parseFloat(document.getElementById('boardThickness').value),
+        boardWidth: parseFloat(document.getElementById('boardWidth').value),
+        fingerCount: parseInt(document.getElementById('fingerCount').value),
+        bitDiameter: parseFloat(document.getElementById('bitDiameter').value),
+        fitTolerance: parseFloat(document.getElementById('fitTolerance').value),
+        pieceType: document.getElementById('pieceType').value,
+        orientation: document.getElementById('orientation').value,
+        depthPerPass: parseFloat(document.getElementById('depthPerPass').value),
+        feedRate: parseFloat(document.getElementById('feedRate').value),
+        spindleRpm: parseFloat(document.getElementById('spindleRpm').value),
+        spindleDelay: parseInt(document.getElementById('spindleDelay').value),
+        mistM7: document.getElementById('mistM7').checked,
+        floodM8: document.getElementById('floodM8').checked
+      };
+
+      if (!validateSlotVsBit()) return;
+
+      var convertToMetric = function(value) { return isImperial ? value * INCH_TO_MM : value; };
+      var settingsToSave = {
+        boxjoints: {
+          boardThickness: convertToMetric(displayValues.boardThickness),
+          boardWidth: convertToMetric(displayValues.boardWidth),
+          fingerCount: displayValues.fingerCount,
+          bitDiameter: convertToMetric(displayValues.bitDiameter),
+          fitTolerance: convertToMetric(displayValues.fitTolerance),
+          pieceType: displayValues.pieceType,
+          orientation: displayValues.orientation,
+          depthPerPass: convertToMetric(displayValues.depthPerPass),
+          feedRate: convertToMetric(displayValues.feedRate),
+          spindleRpm: displayValues.spindleRpm,
+          spindleDelay: displayValues.spindleDelay,
+          mistM7: displayValues.mistM7,
+          floodM8: displayValues.floodM8
+        }
+      };
+
+      await fetch(BASE_URL + '/api/plugins/com.ncsender.boxjoints/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settingsToSave)
+      });
+
+      var gcode = generateBoxJointsGCode(displayValues);
+
+      var pieceTypeLabel = displayValues.pieceType === 'Both' ? 'AB' : displayValues.pieceType;
+      var filename = 'BoxJoint_' + pieceTypeLabel + '_' + displayValues.orientation +
+        '_BT-' + displayValues.boardThickness + '_BW-' + displayValues.boardWidth +
+        '_FC-' + displayValues.fingerCount + '_DPP-' + displayValues.depthPerPass + '.nc';
+
+      try {
+        var response = await fetch(BASE_URL + '/api/gcode-files/load-temp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: filename, content: gcode })
+        });
+
+        if (response.ok) {
+          console.log('Box Joints G-code generated and loaded');
+        } else {
+          console.error('Failed to load G-code');
+        }
+      } catch (error) {
+        console.error('Error loading G-code:', error);
+      }
+
+      window.postMessage({ type: 'close-plugin-dialog' }, '*');
+    });
+  }
+
+  init();
+})();
+</script>
