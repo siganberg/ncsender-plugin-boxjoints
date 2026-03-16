@@ -19,19 +19,26 @@
   @keyframes bj-spin {
     to { transform: rotate(360deg); }
   }
+  .boxjoints-wrapper {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    overflow: hidden;
+    height: 100%;
+    max-width: 800px;
+    width: 100%;
+  }
   .boxjoints-layout {
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
     max-width: 800px;
     width: 100%;
   }
   .form-column {
     flex: 1;
-    overflow-y: auto;
     padding: 20px;
   }
   .plugin-dialog-footer {
-    grid-column: 1 / -1;
     padding: 16px 20px;
     border-top: 1px solid var(--color-border);
     background: var(--color-surface);
@@ -267,7 +274,8 @@
         spindleRpm: savedSettings.spindleRpm != null ? savedSettings.spindleRpm : 18000,
         spindleDelay: savedSettings.spindleDelay != null ? savedSettings.spindleDelay : 3,
         mistM7: savedSettings.mistM7 != null ? savedSettings.mistM7 : false,
-        floodM8: savedSettings.floodM8 != null ? savedSettings.floodM8 : false
+        floodM8: savedSettings.floodM8 != null ? savedSettings.floodM8 : false,
+        saveToFileManager: savedSettings.saveToFileManager != null ? savedSettings.saveToFileManager : false
       };
 
       renderForm(settings, isImperial, distanceUnit, feedRateUnit);
@@ -283,7 +291,8 @@
   function renderForm(settings, isImperial, distanceUnit, feedRateUnit) {
     var root = document.getElementById('boxjoints-root');
 
-    var html = '<div class="boxjoints-layout">' +
+    var html = '<div class="boxjoints-wrapper">' +
+    '<div class="boxjoints-layout">' +
       '<div class="form-column">' +
         '<form id="boxjointsForm" novalidate>' +
           '<div class="form-cards-container">' +
@@ -389,6 +398,15 @@
               '<div id="legend-container" style="margin-bottom: 16px;"></div>' +
               '<div id="preview-container"></div>' +
               '<div id="instruction-container"></div>' +
+              '<div class="form-row coolant-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border);">' +
+                '<div class="coolant-label">Save to File Manager</div>' +
+                '<div class="coolant-control">' +
+                  '<label class="toggle-switch">' +
+                    '<input type="checkbox" id="saveToFileManager"' + (settings.saveToFileManager ? ' checked' : '') + '>' +
+                    '<span class="toggle-slider"></span>' +
+                  '</label>' +
+                '</div>' +
+              '</div>' +
             '</div>' +
           '</div>' +
         '</form>' +
@@ -399,6 +417,7 @@
         '<button type="button" class="btn btn-secondary" id="btnClose">Close</button>' +
         '<button type="button" class="btn btn-primary" id="btnGenerate">Generate</button>' +
       '</div>' +
+    '</div>' +
     '</div>';
 
     root.innerHTML = html;
@@ -1100,7 +1119,8 @@
         spindleRpm: parseFloat(document.getElementById('spindleRpm').value),
         spindleDelay: parseInt(document.getElementById('spindleDelay').value),
         mistM7: document.getElementById('mistM7').checked,
-        floodM8: document.getElementById('floodM8').checked
+        floodM8: document.getElementById('floodM8').checked,
+        saveToFileManager: document.getElementById('saveToFileManager').checked
       };
 
       if (!validateSlotVsBit()) return;
@@ -1120,7 +1140,8 @@
           spindleRpm: displayValues.spindleRpm,
           spindleDelay: displayValues.spindleDelay,
           mistM7: displayValues.mistM7,
-          floodM8: displayValues.floodM8
+          floodM8: displayValues.floodM8,
+          saveToFileManager: displayValues.saveToFileManager
         }
       };
 
@@ -1131,26 +1152,54 @@
       });
 
       var gcode = generateBoxJointsGCode(displayValues);
-
       var pieceTypeLabel = displayValues.pieceType === 'Both' ? 'AB' : displayValues.pieceType;
-      var filename = 'BoxJoint_' + pieceTypeLabel + '_' + displayValues.orientation +
-        '_BT-' + displayValues.boardThickness + '_BW-' + displayValues.boardWidth +
-        '_FC-' + displayValues.fingerCount + '_DPP-' + displayValues.depthPerPass + '.nc';
+      var unitLabel = isImperial ? 'in' : 'mm';
 
       try {
-        var response = await fetch(BASE_URL + '/api/gcode-files/load-temp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: filename, content: gcode })
-        });
+        if (displayValues.saveToFileManager) {
+          var filename = 'BT-' + displayValues.boardThickness + '_BW-' + displayValues.boardWidth +
+            '_FC-' + displayValues.fingerCount + '_FT-' + displayValues.fitTolerance +
+            '_' + pieceTypeLabel + '_' + displayValues.orientation + '_DPP-' + displayValues.depthPerPass + '.nc';
 
-        if (response.ok) {
-          console.log('Box Joints G-code generated and loaded');
+          await fetch(BASE_URL + '/api/gcode-files/folders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: 'BoxJoints' })
+          }).catch(function() {});
+
+          var savePath = 'BoxJoints/' + filename;
+          await fetch(BASE_URL + '/api/gcode-files/file/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: savePath, content: gcode })
+          });
+
+          await fetch(BASE_URL + '/api/gcode-files/load', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: savePath })
+          });
+
+          console.log('Box Joints G-code saved to File Manager:', savePath);
         } else {
-          console.error('Failed to load G-code');
+          var filename = 'BoxJoint_' + pieceTypeLabel + '_' + displayValues.orientation +
+            '_BT-' + displayValues.boardThickness + '_BW-' + displayValues.boardWidth +
+            '_FC-' + displayValues.fingerCount + '_DPP-' + displayValues.depthPerPass + '.nc';
+
+          var response = await fetch(BASE_URL + '/api/gcode-files/load-temp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename, content: gcode })
+          });
+
+          if (response.ok) {
+            console.log('Box Joints G-code generated and loaded');
+          } else {
+            console.error('Failed to load G-code');
+          }
         }
       } catch (error) {
-        console.error('Error loading G-code:', error);
+        console.error('Error saving G-code:', error);
       }
 
       window.postMessage({ type: 'close-plugin-dialog' }, '*');
